@@ -12,20 +12,25 @@ export default function TranscriptPanel({ turns }: { turns: TranscriptTurn[] }) 
 
   if (turns.length === 0) {
     return (
-      <div className="rounded-card border border-line bg-surface p-6 text-center text-sm text-muted">
+      <div className="rounded-card border border-line bg-white p-6 text-center text-sm text-muted shadow-sm">
         Your conversation will appear here once the interview begins.
       </div>
     );
   }
 
   return (
-    <div ref={scrollRef} className="max-h-72 space-y-3 overflow-y-auto rounded-card border border-line bg-surface p-5">
+    <div
+      ref={scrollRef}
+      className="max-h-72 space-y-3 overflow-y-auto rounded-card border border-line bg-white p-5 shadow-sm"
+    >
       {turns.map((turn, index) => (
         <div key={index} className={`flex ${turn.role === "user" ? "justify-end" : "justify-start"}`}>
           <div
-            className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm ${
-              turn.role === "user" ? "bg-indigo/20 text-white" : "bg-surface-raised text-muted"
-            }`}
+            className={
+              turn.role === "user"
+                ? "max-w-[85%] rounded-2xl rounded-tr-sm bg-navy px-4 py-3 text-[14.5px] text-white"
+                : "max-w-[85%] rounded-2xl rounded-tl-sm bg-blue/10 px-4 py-3 text-[14.5px] text-navy"
+            }
           >
             {turn.text}
           </div>

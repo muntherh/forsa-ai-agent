@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMotionValue, useSpring } from "framer-motion";
@@ -205,14 +206,14 @@ function InterviewSession() {
   if (!configured) {
     return (
       <main className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center px-6 text-center">
-        <h1 className="text-xl font-semibold text-white">Vapi is not configured</h1>
+        <h1 className="font-display text-xl font-bold text-navy">Vapi is not configured</h1>
         <p className="mt-3 text-sm text-muted">
-          Add <code className="rounded bg-surface px-1.5 py-0.5 text-cyan">NEXT_PUBLIC_VAPI_PUBLIC_KEY</code> to a{" "}
-          <code className="rounded bg-surface px-1.5 py-0.5 text-cyan">.env.local</code> file (see{" "}
-          <code className="rounded bg-surface px-1.5 py-0.5 text-cyan">.env.example</code>) and restart the dev
+          Add <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark">NEXT_PUBLIC_VAPI_PUBLIC_KEY</code> to a{" "}
+          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark">.env.local</code> file (see{" "}
+          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark">.env.example</code>) and restart the dev
           server.
         </p>
-        <Link href="/" className="mt-6 text-sm font-medium text-cyan hover:underline">
+        <Link href="/" className="mt-6 text-sm font-semibold text-blue hover:underline">
           ← Back to start
         </Link>
       </main>
@@ -225,11 +226,12 @@ function InterviewSession() {
         <button
           type="button"
           onClick={() => router.push("/")}
-          className="text-sm font-medium text-muted transition hover:text-white"
+          className="flex items-center gap-2 text-sm font-semibold text-muted transition hover:text-navy"
         >
+          <Image src="/logo.png" alt="Forsa" width={24} height={24} className="rounded-full border border-line" />
           ← Exit
         </button>
-        <span className="rounded-full border border-line bg-surface px-3 py-1 text-xs text-muted">
+        <span className="rounded-full border border-line bg-white px-3 py-1 text-xs font-medium text-muted">
           {role} · {level}
         </span>
       </div>
@@ -243,7 +245,7 @@ function InterviewSession() {
       </div>
 
       {errorMessage && (
-        <p className="mt-6 rounded-lg border border-bad/30 bg-bad/10 px-4 py-3 text-center text-sm text-bad">
+        <p className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-600">
           {errorMessage}
         </p>
       )}
@@ -259,15 +261,15 @@ function InterviewSession() {
           {scorecardStatus === "ready" && scorecard && <Scorecard data={scorecard} />}
 
           {scorecardStatus === "waiting" && (
-            <div className="flex flex-col items-center gap-3 rounded-card border border-line bg-surface p-8 text-center">
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-cyan" />
+            <div className="flex flex-col items-center gap-3 rounded-card border border-line bg-white p-8 text-center shadow-sm">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-blue" />
               <p className="text-sm text-muted">Generating your interview scorecard…</p>
             </div>
           )}
 
           {scorecardStatus === "error" && (
-            <div className="rounded-card border border-warn/30 bg-warn/10 p-6 text-center">
-              <p className="text-sm text-warn">
+            <div className="rounded-card border border-amber/30 bg-amber/10 p-6 text-center">
+              <p className="text-sm text-amber-dark">
                 We couldn&apos;t generate a scorecard for this interview. Your transcript above is still available —
                 please try another practice interview.
               </p>
@@ -275,7 +277,7 @@ function InterviewSession() {
           )}
 
           {scorecardStatus === "too-short" && (
-            <div className="rounded-card border border-line bg-surface p-6 text-center">
+            <div className="rounded-card border border-line bg-white p-6 text-center shadow-sm">
               <p className="text-sm text-muted">
                 That call ended too early to generate a meaningful scorecard. Try a full practice interview of at
                 least a few questions.

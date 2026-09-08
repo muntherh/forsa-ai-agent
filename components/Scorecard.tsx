@@ -3,10 +3,10 @@
 import type { Recommendation, Scorecard as ScorecardData } from "@/lib/types";
 
 const RECOMMENDATION_STYLES: Record<Recommendation, string> = {
-  "Strong Hire": "bg-good/15 text-good border-good/30",
-  Hire: "bg-good/10 text-good border-good/20",
-  "No Hire": "bg-warn/10 text-warn border-warn/20",
-  "Strong No Hire": "bg-bad/10 text-bad border-bad/20",
+  "Strong Hire": "bg-teal/15 text-teal-dark border-teal/30",
+  Hire: "bg-teal/10 text-teal-dark border-teal/20",
+  "No Hire": "bg-amber/15 text-amber-dark border-amber/30",
+  "Strong No Hire": "bg-red-50 text-red-600 border-red-200",
 };
 
 const CATEGORY_LABELS: Record<keyof ScorecardData["categoryScores"], string> = {
@@ -17,20 +17,26 @@ const CATEGORY_LABELS: Record<keyof ScorecardData["categoryScores"], string> = {
 };
 
 function scoreColor(score: number) {
-  if (score >= 75) return "bg-good";
-  if (score >= 50) return "bg-warn";
-  return "bg-bad";
+  if (score >= 75) return "bg-teal";
+  if (score >= 50) return "bg-amber";
+  return "bg-red-500";
+}
+
+function scoreBadgeClass(score: number) {
+  if (score >= 75) return "bg-teal/10 text-teal-dark";
+  if (score >= 50) return "bg-amber/15 text-amber-dark";
+  return "bg-red-50 text-red-600";
 }
 
 function ScoreRing({ score }: { score: number }) {
   const circumference = 2 * Math.PI * 54;
   const offset = circumference - (score / 100) * circumference;
-  const color = score >= 75 ? "#34D399" : score >= 50 ? "#FBBF24" : "#F87171";
+  const color = score >= 75 ? "#1FA98A" : score >= 50 ? "#F2A93B" : "#DC2626";
 
   return (
     <div className="relative flex h-40 w-40 items-center justify-center">
       <svg className="h-full w-full -rotate-90" viewBox="0 0 120 120">
-        <circle cx="60" cy="60" r="54" fill="none" stroke="#232A42" strokeWidth="10" />
+        <circle cx="60" cy="60" r="54" fill="none" stroke="#E3E9EF" strokeWidth="10" />
         <circle
           cx="60"
           cy="60"
@@ -45,7 +51,7 @@ function ScoreRing({ score }: { score: number }) {
         />
       </svg>
       <div className="absolute flex flex-col items-center">
-        <span className="text-4xl font-semibold text-white">{Math.round(score)}</span>
+        <span className="font-mono text-4xl font-bold text-navy">{Math.round(score)}</span>
         <span className="text-xs uppercase tracking-wide text-muted">/ 100</span>
       </div>
     </div>
@@ -54,10 +60,10 @@ function ScoreRing({ score }: { score: number }) {
 
 export default function Scorecard({ data }: { data: ScorecardData }) {
   return (
-    <div className="animate-fade-in-up rounded-card border border-line bg-surface p-6 sm:p-8">
+    <div className="animate-fade-in-up rounded-card border border-line bg-white p-6 shadow-[0_30px_60px_-20px_rgba(11,46,74,0.25)] sm:p-8">
       <div className="flex flex-col items-center gap-4 border-b border-line pb-8 sm:flex-row sm:justify-between">
         <div className="text-center sm:text-left">
-          <h2 className="text-lg font-semibold text-white">Interview Scorecard</h2>
+          <h2 className="font-display text-lg font-bold text-navy">Interview Scorecard</h2>
           <p className="mt-1 max-w-md text-sm text-muted">{data.summary}</p>
         </div>
         <ScoreRing score={data.overallScore} />
@@ -65,7 +71,7 @@ export default function Scorecard({ data }: { data: ScorecardData }) {
 
       <div className="mt-6 flex justify-center sm:justify-start">
         <span
-          className={`rounded-full border px-4 py-1.5 text-sm font-medium ${RECOMMENDATION_STYLES[data.recommendation]}`}
+          className={`rounded-full border px-4 py-1.5 text-sm font-semibold ${RECOMMENDATION_STYLES[data.recommendation]}`}
         >
           {data.recommendation}
         </span>
@@ -76,11 +82,13 @@ export default function Scorecard({ data }: { data: ScorecardData }) {
           const value = data.categoryScores[key];
           return (
             <div key={key}>
-              <div className="mb-1.5 flex items-center justify-between text-sm">
-                <span className="text-muted">{CATEGORY_LABELS[key]}</span>
-                <span className="font-medium text-white">{Math.round(value)}</span>
+              <div className="mb-1.5 flex items-center justify-between text-[13.5px]">
+                <span className="font-medium text-muted">{CATEGORY_LABELS[key]}</span>
+                <span className={`rounded-full px-2 py-0.5 font-mono text-xs font-bold ${scoreBadgeClass(value)}`}>
+                  {Math.round(value)}
+                </span>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-canvas">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-[#EDF1F5]">
                 <div
                   className={`h-full rounded-full ${scoreColor(value)} transition-all duration-700 ease-out`}
                   style={{ width: `${Math.max(4, Math.min(100, value))}%` }}
@@ -93,22 +101,22 @@ export default function Scorecard({ data }: { data: ScorecardData }) {
 
       <div className="mt-8 grid gap-6 sm:grid-cols-2">
         <div>
-          <h3 className="mb-3 text-sm font-semibold text-good">Strengths</h3>
+          <h3 className="mb-3 text-sm font-bold text-teal-dark">Strengths</h3>
           <ul className="space-y-2">
             {data.strengths.map((item, index) => (
               <li key={index} className="flex gap-2 text-sm text-muted">
-                <span className="mt-0.5 text-good">+</span>
+                <span className="mt-0.5 text-teal-dark">+</span>
                 <span>{item}</span>
               </li>
             ))}
           </ul>
         </div>
         <div>
-          <h3 className="mb-3 text-sm font-semibold text-warn">Areas for Improvement</h3>
+          <h3 className="mb-3 text-sm font-bold text-amber-dark">Areas for Improvement</h3>
           <ul className="space-y-2">
             {data.areasForImprovement.map((item, index) => (
               <li key={index} className="flex gap-2 text-sm text-muted">
-                <span className="mt-0.5 text-warn">-</span>
+                <span className="mt-0.5 text-amber-dark">-</span>
                 <span>{item}</span>
               </li>
             ))}

@@ -5,8 +5,11 @@ import { AnimatePresence, motion, useTransform, type MotionValue } from "framer-
 import { alpha, mix, seededRandom, useSafeReducedMotion } from "@/lib/motion";
 import type { CallStatus } from "@/lib/types";
 
-const INDIGO = "#6366F1";
-const CYAN = "#22D3EE";
+// Forsa's own brand tokens (tailwind.config.ts: blue #2470B3, teal
+// #1FA98A) — the same pair used by the waveform in Forsa's production
+// voice-interview UI.
+const BLUE = "#2470B3";
+const TEAL = "#1FA98A";
 const SIZE = 176;
 const BAR_COUNT = 32;
 
@@ -20,8 +23,8 @@ function useWaveformBars() {
       const peak = (raw: number) => Math.max(0.08, Math.min(1, raw * envelope));
 
       return {
-        colour: mix(INDIGO, CYAN, fromCentre),
-        glow: mix(INDIGO, CYAN, fromCentre, 0.5),
+        colour: mix(BLUE, TEAL, fromCentre),
+        glow: mix(BLUE, TEAL, fromCentre, 0.5),
         keyframes: [
           peak(0.28 + random() * 0.3),
           peak(0.62 + random() * 0.38),
@@ -111,7 +114,7 @@ function ListeningPulse({ reduced }: { reduced: boolean }) {
             key={ring}
             aria-hidden
             className="absolute rounded-full border"
-            style={{ width: 76, height: 76, borderColor: alpha(CYAN, 0.5) }}
+            style={{ width: 76, height: 76, borderColor: alpha(TEAL, 0.5) }}
             initial={{ scale: 0.7, opacity: 0 }}
             animate={{ scale: [0.7, 2.6], opacity: [0.55, 0] }}
             transition={{ duration: 3, delay: ring * 1, repeat: Infinity, ease: "easeOut" }}
@@ -123,7 +126,7 @@ function ListeningPulse({ reduced }: { reduced: boolean }) {
         style={{
           width: 120,
           height: 120,
-          background: `radial-gradient(circle, ${alpha(CYAN, 0.5)} 0%, transparent 70%)`,
+          background: `radial-gradient(circle, ${alpha(TEAL, 0.5)} 0%, transparent 70%)`,
         }}
         animate={reduced ? { opacity: 0.6, scale: 1 } : { opacity: [0.45, 0.85, 0.45], scale: [0.94, 1.08, 0.94] }}
         transition={reduced ? { duration: 0 } : { duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
@@ -134,8 +137,8 @@ function ListeningPulse({ reduced }: { reduced: boolean }) {
         style={{
           width: 18,
           height: 18,
-          backgroundColor: CYAN,
-          boxShadow: `0 0 20px ${alpha(CYAN, 0.9)}, 0 0 50px ${alpha(CYAN, 0.4)}`,
+          backgroundColor: TEAL,
+          boxShadow: `0 0 20px ${alpha(TEAL, 0.9)}, 0 0 50px ${alpha(TEAL, 0.4)}`,
         }}
         animate={reduced ? { scale: 1 } : { scale: [1, 1.15, 1] }}
         transition={reduced ? { duration: 0 } : { duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
@@ -153,8 +156,8 @@ function IdlePulse({ reduced }: { reduced: boolean }) {
         style={{
           width: 64,
           height: 64,
-          background: `radial-gradient(circle at 35% 30%, ${alpha(INDIGO, 0.9)}, ${alpha(CYAN, 0.35)} 70%, transparent 100%)`,
-          boxShadow: `0 0 40px ${alpha(INDIGO, 0.35)}`,
+          background: `radial-gradient(circle at 35% 30%, ${alpha(BLUE, 0.9)}, ${alpha(TEAL, 0.35)} 70%, transparent 100%)`,
+          boxShadow: `0 0 40px ${alpha(BLUE, 0.35)}`,
         }}
         animate={reduced ? { scale: 1 } : { scale: [1, 1.05, 1] }}
         transition={reduced ? { duration: 0 } : { duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
@@ -169,11 +172,11 @@ function ConnectingSpinner() {
       <motion.span
         aria-hidden
         className="absolute rounded-full border-2 border-transparent"
-        style={{ width: 72, height: 72, borderTopColor: CYAN, borderRightColor: INDIGO }}
+        style={{ width: 72, height: 72, borderTopColor: TEAL, borderRightColor: BLUE }}
         animate={{ rotate: 360 }}
         transition={{ duration: 1.1, repeat: Infinity, ease: "linear" }}
       />
-      <span className="rounded-full" style={{ width: 14, height: 14, backgroundColor: INDIGO }} />
+      <span className="rounded-full" style={{ width: 14, height: 14, backgroundColor: BLUE }} />
     </div>
   );
 }
@@ -191,7 +194,7 @@ export default function VoiceWaveform({ status, volume }: { status: CallStatus; 
   const reduced = useSafeReducedMotion();
 
   return (
-    <div className="flex flex-col items-center justify-center rounded-card border border-line bg-surface py-8">
+    <div className="flex flex-col items-center justify-center rounded-card border border-line bg-white py-8">
       <div className="flex items-center justify-center" style={{ height: SIZE, width: "100%" }}>
         <AnimatePresence mode="wait">
           <motion.div

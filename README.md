@@ -107,13 +107,28 @@ this repository.
 
 ## 5. What's Adapted From Forsa's Production Stack
 
-This is a clean, standalone project — not a copy of Forsa's production codebase — but it borrows a
-few proven patterns:
+This is a clean, standalone project — not a copy of Forsa's production codebase — but it deliberately
+carries Forsa's actual visual identity and a few proven implementation patterns, so it reads as the
+same product family rather than a generic AI-demo skin:
 
+- **Brand palette & typography** (`tailwind.config.ts`, `app/layout.tsx`) — the exact color tokens
+  (`navy` #0B2E4A, `blue` #2470B3 / `blue-dark` #1B5A8C, `teal` #1FA98A, `amber` #F2A93B, plus the
+  `bg`/`line`/`muted` neutrals) and font pairing (Almarai display + IBM Plex body/mono) from
+  `forsa-frontend/tailwind.config.ts`, loaded on the Latin subset since this app is English-only
+  where forsa-frontend's is Arabic-first.
+- **The Forsa logo and wordmark** (`public/logo.png`, copied from forsa-frontend) appear in the
+  header on every screen — landing page and the in-call header — using the same circular
+  bordered-image + bold-wordmark treatment as forsa-frontend's `Navbar`/`MinimalHeader`.
+- **Card, button, and chat-bubble styling** — white `rounded-card`/`rounded-2xl` surfaces on
+  `bg-bg`, the `blue`→`teal` gradient progress bars and hero-card shadow from forsa-frontend's
+  `ReportCard`, the primary-button treatment (`bg-blue`, hover lift, tinted shadow) from its
+  `Button` component, and the two-tone chat bubbles (navy for the candidate, tinted blue for the
+  interviewer) from its `ChatInterview`.
 - **The voice waveform visualizer** (`components/VoiceWaveform.tsx`) reuses the seeded-random,
-  hydration-safe animation technique from Forsa's own live voice-interview UI, so the waveform
-  renders identically on the server and client and reacts to the assistant's real audio volume via
-  a smoothed Framer Motion spring rather than raw, jittery ticks.
+  hydration-safe animation technique — and the same blue/teal palette — from Forsa's own live
+  voice-interview UI, so the waveform renders identically on the server and client and reacts to
+  the assistant's real audio volume via a smoothed Framer Motion spring rather than raw, jittery
+  ticks.
 - **The Vapi assistant shape** (`lib/assistant.ts`) — model/voice/transcriber config plus a
   built-in `endCall` tool the model invokes itself once the interview is over — follows the same
   pattern Forsa's own Vapi-based interview feature uses in production.
