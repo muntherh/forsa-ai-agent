@@ -1,0 +1,38 @@
+PROPRIETARY EVALUATION LICENSE
+
+Copyright (c) 2026 Forsa (فرصة). All rights reserved.
+
+This repository ("Forsa AI — English Edition") was submitted as an entry to
+the Decoding Data Science × JetBrains 8-Day Agentic AI Application Challenge
+("the Challenge").
+
+1. Grant of Rights (Evaluation Only)
+   Decoding Data Science, JetBrains, and their designated judges, organizers,
+   and evaluation partners ("Evaluators") are granted a limited, non-exclusive,
+   non-transferable, royalty-free license to access, clone, install, run, and
+   evaluate this software solely for the purposes of judging, scoring, and
+   showcasing submissions to the Challenge.
+
+2. Restrictions
+   Except as expressly permitted in Section 1, no person or entity may copy,
+   modify, merge, publish, distribute, sublicense, sell, or otherwise exploit
+   this software, in whole or in part, without the prior written consent of
+   the copyright holder. This software is provided for demonstration and
+   evaluation purposes only and is NOT open source.
+
+3. No Warranty
+   THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL
+   THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE
+   USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+4. Third-Party Services
+   This project integrates with third-party services (Vapi.ai, OpenAI) under
+   their own respective terms of service. No API keys, credentials, or
+   proprietary data belonging to Forsa or any third party are included in
+   this repository.
+
+For licensing inquiries beyond the scope of the Challenge, contact the
+copyright holder directly.
