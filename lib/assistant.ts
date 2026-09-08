@@ -70,11 +70,12 @@ const FIRST_MESSAGE =
  * The real-time GPT-4o conversation itself is run by Vapi's own
  * infrastructure, using the OpenAI credentials configured on your Vapi
  * account (dashboard.vapi.ai → Model Providers) — this app never talks to
- * OpenAI directly for the live call. The post-call evaluation is a separate,
- * second GPT-4o call this app makes itself once the interview ends (see
- * app/api/evaluate/route.ts) — that one does use this app's own
- * OPENAI_API_KEY, since it needs Structured Outputs against the rubric in
- * lib/rubric.ts, which is not something Vapi's assistant config controls.
+ * OpenAI directly for the live call. The post-call evaluation is a
+ * separate call this app makes itself once the interview ends (see
+ * app/api/evaluate/route.ts), to Claude via this app's own
+ * ANTHROPIC_API_KEY, since it needs Structured Outputs against the rubric
+ * in lib/rubric.ts, which is not something Vapi's assistant config
+ * controls.
  */
 export function buildInterviewAssistant(): InterviewAssistantConfig {
   return {

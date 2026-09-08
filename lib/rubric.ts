@@ -1,63 +1,26 @@
-import { z } from "zod";
+import { z } from "zod/v4";
 import type { InterviewConfig, TranscriptTurn } from "./types";
 
 /**
- * The evaluation rubric, expressed twice:
+ * The evaluation rubric. `scorecardSchema` is the single source of truth,
+ * used two ways:
  *
- * 1. `SCORECARD_JSON_SCHEMA` — passed as OpenAI's `response_format.json_schema`
- *    on the evaluation call in app/api/evaluate/route.ts (Structured Outputs,
- *    "strict" mode — every field is required and `additionalProperties` is
- *    false at every object level, which is what strict mode requires).
- * 2. `scorecardSchema` (zod) — used again on this app's own side once the
- *    response comes back, before it's trusted and rendered. Belt and
- *    suspenders: strict mode makes a malformed shape unlikely, not
- *    impossible (a timeout, a proxy, or a future API change could still
- *    hand back something unexpected).
+ * 1. Handed to `@anthropic-ai/sdk`'s `zodOutputFormat()` in
+ *    app/api/evaluate/route.ts, which derives a JSON Schema from it for
+ *    Claude's Structured Outputs (`output_config.format`) and parses the
+ *    response against it automatically via `client.messages.parse()`.
+ * 2. Re-validated with `.safeParse()` in app/interview/page.tsx before the
+ *    scorecard is trusted and rendered — belt and suspenders, since a
+ *    timeout, a refusal, or a future API change could still hand back
+ *    something unexpected even under Structured Outputs.
  *
- * Keep the two in sync.
+ * Built against the `zod/v4` entry point (not the top-level `zod` v3-style
+ * export) — `zodOutputFormat` calls `z.toJSONSchema()` internally, which
+ * only exists on `zod/v4` schema instances; a schema built from the classic
+ * `zod` import fails at runtime when passed to it. Every fluent method used
+ * below (`.object`, `.enum`, `.array`, `.min`/`.max`) exists on both, so
+ * this is purely an import-path change, not a schema rewrite.
  */
-
-export const SCORECARD_JSON_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    overallScore: {
-      type: "number",
-      description: "Overall interview performance, 0-100.",
-    },
-    recommendation: {
-      type: "string",
-      enum: ["Strong Hire", "Hire", "No Hire", "Strong No Hire"],
-      description: "A hiring recommendation consistent with the overall score and category scores.",
-    },
-    categoryScores: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        technicalKnowledge: { type: "number", description: "0-100. Depth and accuracy of technical answers." },
-        problemSolving: { type: "number", description: "0-100. Structured thinking and approach to problems." },
-        communication: { type: "number", description: "0-100. Clarity, organization, and articulation of answers." },
-        confidence: { type: "number", description: "0-100. Composure and conviction in responses." },
-      },
-      required: ["technicalKnowledge", "problemSolving", "communication", "confidence"],
-    },
-    strengths: {
-      type: "array",
-      items: { type: "string" },
-      description: "Up to 3 concrete strengths, each grounded in a specific moment from the interview.",
-    },
-    areasForImprovement: {
-      type: "array",
-      items: { type: "string" },
-      description: "Up to 3 concrete areas to improve, each grounded in a specific moment from the interview.",
-    },
-    summary: {
-      type: "string",
-      description: "A 2-3 sentence narrative summary of the candidate's overall performance.",
-    },
-  },
-  required: ["overallScore", "recommendation", "categoryScores", "strengths", "areasForImprovement", "summary"],
-} as const;
 
 export const scorecardSchema = z.object({
   overallScore: z.number().min(0).max(100),
@@ -93,14 +56,16 @@ harsh score.
 Never reference or evaluate the candidate's age, gender, ethnicity, accent, disability, or any
 other protected characteristic — evaluate only the substance of what they said.`;
 
-export function buildEvaluationMessages(transcript: TranscriptTurn[], config: InterviewConfig) {
-  const transcriptText = transcript.map((turn) => `${turn.role === "assistant" ? "Interviewer" : "Candidate"}: ${turn.text}`).join("\n");
+/** The system prompt for the evaluation call — see app/api/evaluate/route.ts. */
+export function buildEvaluationSystemPrompt(): string {
+  return EVALUATOR_SYSTEM_PROMPT;
+}
 
-  return [
-    { role: "system" as const, content: EVALUATOR_SYSTEM_PROMPT },
-    {
-      role: "user" as const,
-      content: `Role: ${config.role}\nExperience level: ${config.experienceLevel}\n\nTranscript:\n${transcriptText}`,
-    },
-  ];
+/** The user-turn content for the evaluation call: role/level plus the full transcript. */
+export function buildEvaluationUserContent(transcript: TranscriptTurn[], config: InterviewConfig): string {
+  const transcriptText = transcript
+    .map((turn) => `${turn.role === "assistant" ? "Interviewer" : "Candidate"}: ${turn.text}`)
+    .join("\n");
+
+  return `Role: ${config.role}\nExperience level: ${config.experienceLevel}\n\nTranscript:\n${transcriptText}`;
 }

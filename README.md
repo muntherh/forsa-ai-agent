@@ -43,8 +43,8 @@ full mock interview.
         ▼
    Call ends  ──────────────────────────────────────────────►  POST /api/evaluate
                                                                        │
-                                                     Second, standalone GPT-4o call
-                                                     (this app's own OpenAI key),
+                                                     Separate Claude call
+                                                     (this app's own Anthropic key),
                                                      Structured Outputs against the
                                                      rubric in lib/rubric.ts
                                                                        │
@@ -55,24 +55,26 @@ full mock interview.
                                                         <Scorecard /> component
 ```
 
-Two separate GPT-4o calls, deliberately:
+Two separate model calls, deliberately, on two different providers:
 
-1. **The live interview** — run entirely by Vapi's own real-time voice pipeline. `lib/assistant.ts`
-   defines the assistant (model, voice, transcriber, system prompt) as a plain config object handed
-   to `vapi.start()` at call time — nothing is pre-created in a Vapi dashboard, which is what lets
-   this project run with just a Vapi **public** key.
+1. **The live interview** — run entirely by Vapi's own real-time voice pipeline against OpenAI
+   GPT-4o. `lib/assistant.ts` defines the assistant (model, voice, transcriber, system prompt) as a
+   plain config object handed to `vapi.start()` at call time — nothing is pre-created in a Vapi
+   dashboard, which is what lets this project run with just a Vapi **public** key.
 2. **The evaluation** — once the call ends, this app POSTs the transcript it accumulated
-   client-side to its own `/api/evaluate` route, which makes a second, independent GPT-4o call
-   using [OpenAI Structured Outputs](https://platform.openai.com/docs/guides/structured-outputs)
-   (strict JSON-schema mode) so the response is guaranteed to match the `Scorecard` shape the UI
+   client-side to its own `/api/evaluate` route, which makes a call to **Claude** (`claude-sonnet-5`,
+   via the official [`@anthropic-ai/sdk`](https://www.npmjs.com/package/@anthropic-ai/sdk)) using
+   [Structured Outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)
+   (`output_config.format`, built from the same Zod schema in `lib/rubric.ts` via
+   `client.messages.parse()`) so the response is guaranteed to match the `Scorecard` shape the UI
    renders — no prompt-engineered "please return JSON" guessing.
 
 ## 3. Quickstart
 
-**Prerequisites:** Node.js 18.18+ and a [Vapi.ai](https://vapi.ai) account with GPT-4o enabled as
-a model provider (Vapi dashboard → Model Providers → OpenAI — either your own OpenAI key or Vapi's
-built-in credits), plus your own [OpenAI API key](https://platform.openai.com/api-keys) for the
-evaluation step.
+**Prerequisites:** Node.js 18.18+, a [Vapi.ai](https://vapi.ai) account with GPT-4o enabled as a
+model provider (Vapi dashboard → Model Providers → OpenAI — either your own OpenAI key or Vapi's
+built-in credits) for the live interview, and your own
+[Anthropic API key](https://console.anthropic.com/settings/keys) for the evaluation step.
 
 ```bash
 npm install
@@ -98,7 +100,7 @@ See `.env.example`:
 | Variable | Where it's used | Exposed to the browser? |
 |---|---|---|
 | `NEXT_PUBLIC_VAPI_PUBLIC_KEY` | Starts the WebRTC call client-side (`lib/vapi-client.ts`) | Yes — by design, Vapi's public key is scoped to call-starting only |
-| `OPENAI_API_KEY` | The post-call evaluation request (`app/api/evaluate/route.ts`) | **No** — server-side only, never sent to the browser |
+| `ANTHROPIC_API_KEY` | The post-call evaluation request (`app/api/evaluate/route.ts`) | **No** — server-side only, never sent to the browser |
 
 No database, no auth, no user accounts, and no production credentials of any kind are included in
 this repository.
@@ -124,10 +126,14 @@ few proven patterns:
 
 - The end-to-end voice flow (Vapi WebRTC call → live transcript → evaluation call → rendered
   scorecard) has been built and typechecked/built cleanly, but has **not been verified against a
-  live Vapi + OpenAI account** in this environment (no credentials available here). The error
-  states in `app/interview/page.tsx` (connection errors, an evaluation that fails or times out) are
-  designed to fail honestly rather than silently, but the happy path should be confirmed with a
-  real account before a live demo.
+  live Vapi + OpenAI + Anthropic account** in this environment (no credentials available here). The
+  error states in `app/interview/page.tsx` (connection errors, an evaluation that fails or times
+  out) are designed to fail honestly rather than silently, but the happy path should be confirmed
+  with real accounts before a live demo.
+- The evaluation call targets `claude-sonnet-5`. Claude 3.5 Sonnet (the model originally specified
+  for this call) was retired by Anthropic on 2025-10-28 and now returns a 404 from the API;
+  `claude-sonnet-5` is Anthropic's documented drop-in replacement for every retired Sonnet 3.x
+  snapshot, so it's used instead — see the comment at the top of `app/api/evaluate/route.ts`.
 - `npm audit` reports one high-severity advisory for a PostCSS version bundled *inside* Next.js's
   own build tooling (`node_modules/next/node_modules/postcss`), only fixed by upgrading to a
   Next.js major version. It affects build-time CSS/source-map processing, not this app's runtime
