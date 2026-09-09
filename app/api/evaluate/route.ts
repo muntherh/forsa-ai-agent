@@ -2,11 +2,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { NextRequest, NextResponse } from "next/server";
 import { buildEvaluationSystemPrompt, buildEvaluationUserContent, scorecardSchema } from "@/lib/rubric";
+import { fetchVapiCallTranscript } from "@/lib/vapi-server";
 import type { ExperienceLevel, InterviewRole, TranscriptTurn } from "@/lib/types";
 
 /**
  * Runs the second Claude call: turning a finished interview's transcript
- * into the structured scorecard defined by the rubric in lib/rubric.ts.
+ * into the structured scorecard + action plan defined by the rubric in
+ * lib/rubric.ts.
  *
  * This is deliberately a separate call from the live interview itself (the
  * live conversation is entirely Vapi's — see lib/assistant.ts). Evaluating
@@ -29,6 +31,15 @@ interface EvaluateRequestBody {
   transcript?: TranscriptTurn[];
   role?: InterviewRole;
   experienceLevel?: ExperienceLevel;
+  /** Full CV text, if the candidate uploaded one — see lib/rubric.ts's CV grounding. */
+  cvText?: string;
+  /**
+   * The Vapi call's own id. Optional — only used to fetch a server-side
+   * transcript fallback (see lib/vapi-server.ts) when VAPI_PRIVATE_KEY is
+   * configured and it turns out to be more complete than the transcript
+   * accumulated client-side.
+   */
+  callId?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -47,13 +58,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
 
-  const { transcript, role, experienceLevel } = body;
+  const { transcript, role, experienceLevel, cvText, callId } = body;
   if (!Array.isArray(transcript) || transcript.length === 0 || !role || !experienceLevel) {
     return NextResponse.json(
       { error: "Request must include a non-empty transcript, role, and experienceLevel." },
       { status: 400 }
     );
   }
+
+  // Prefer whichever transcript is more complete: the one accumulated
+  // client-side (already reliable in practice) vs. Vapi's own server-side
+  // record (fetched only if a callId + VAPI_PRIVATE_KEY are both
+  // available — see fetchVapiCallTranscript's own comment for why this is
+  // a fallback rather than the primary source).
+  const serverTranscript = callId ? await fetchVapiCallTranscript(callId) : null;
+  const finalTranscript =
+    serverTranscript && serverTranscript.length > transcript.length ? serverTranscript : transcript;
 
   const anthropic = new Anthropic({ apiKey });
 
@@ -63,7 +83,9 @@ export async function POST(request: NextRequest) {
       model: "claude-sonnet-5",
       max_tokens: 16000,
       system: buildEvaluationSystemPrompt(),
-      messages: [{ role: "user", content: buildEvaluationUserContent(transcript, { role, experienceLevel }) }],
+      messages: [
+        { role: "user", content: buildEvaluationUserContent(finalTranscript, { role, experienceLevel, cvText }) },
+      ],
       output_config: {
         effort: "medium",
         format: zodOutputFormat(scorecardSchema),

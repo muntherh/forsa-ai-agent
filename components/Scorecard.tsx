@@ -1,6 +1,7 @@
 "use client";
 
-import type { Recommendation, Scorecard as ScorecardData } from "@/lib/types";
+import ScorecardPdfReport from "@/components/ScorecardPdfReport";
+import type { ExperienceLevel, InterviewRole, Recommendation, Scorecard as ScorecardData } from "@/lib/types";
 
 const RECOMMENDATION_STYLES: Record<Recommendation, string> = {
   "Strong Hire": "bg-teal/15 text-teal-dark border-teal/30",
@@ -58,7 +59,13 @@ function ScoreRing({ score }: { score: number }) {
   );
 }
 
-export default function Scorecard({ data }: { data: ScorecardData }) {
+interface ScorecardProps {
+  data: ScorecardData;
+  role: InterviewRole;
+  experienceLevel: ExperienceLevel;
+}
+
+export default function Scorecard({ data, role, experienceLevel }: ScorecardProps) {
   return (
     <div className="animate-fade-in-up rounded-card border border-line bg-white p-6 shadow-[0_30px_60px_-20px_rgba(11,46,74,0.25)] sm:p-8">
       <div className="flex flex-col items-center gap-4 border-b border-line pb-8 sm:flex-row sm:justify-between">
@@ -124,7 +131,39 @@ export default function Scorecard({ data }: { data: ScorecardData }) {
         </div>
       </div>
 
-      <p className="mt-8 border-t border-line pt-4 text-xs text-muted">
+      <div className="mt-8 border-t border-line pt-8">
+        <h3 className="font-display text-base font-bold text-navy">{data.actionPlan.title}</h3>
+        <p className="mt-1.5 text-sm text-muted">{data.actionPlan.summary}</p>
+
+        <div className="mt-5 space-y-4">
+          {data.actionPlan.phases.map((phase, index) => (
+            <div key={index} className="rounded-xl border border-line bg-bg p-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-bold text-navy">
+                  {index + 1}. {phase.title}
+                </p>
+                <span className="flex-shrink-0 rounded-full bg-blue/10 px-2.5 py-0.5 text-xs font-semibold text-blue-dark">
+                  {phase.estimatedDuration}
+                </span>
+              </div>
+              <ul className="space-y-1.5">
+                {phase.tasks.map((task, taskIndex) => (
+                  <li key={taskIndex} className="flex items-start gap-2 text-sm text-muted">
+                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal" />
+                    <span>{task}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <ScorecardPdfReport data={data} role={role} experienceLevel={experienceLevel} />
+      </div>
+
+      <p className="mt-6 border-t border-line pt-4 text-xs text-muted">
         This scorecard was generated automatically by an AI model based on a single practice
         interview. It is intended as directional coaching feedback, not a certified assessment of
         the candidate&apos;s abilities.

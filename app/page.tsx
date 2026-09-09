@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import CvUpload from "@/components/CvUpload";
+import { clearCvContext, saveCvContext } from "@/lib/cv-session";
 import type { ExperienceLevel, InterviewRole } from "@/lib/types";
 
 const ROLES: InterviewRole[] = ["Software Engineer", "Data Scientist", "Product Manager", "DevOps Engineer", "UX Designer"];
@@ -14,12 +16,12 @@ const FEATURES = [
     body: "Speak naturally over WebRTC — Ava listens, thinks, and responds in real time, just like a real call.",
   },
   {
-    title: "Adapts to your role & level",
-    body: "Questions are generated live by GPT-4o, tailored to the role and seniority you pick below.",
+    title: "Grounded in your own CV",
+    body: "Upload your CV and Ava opens with a question about a real project or role from it — no CV needed to start.",
   },
   {
-    title: "Instant, structured feedback",
-    body: "The moment the call ends, Claude scores your technical knowledge, communication, and more.",
+    title: "Instant scorecard + action plan",
+    body: "The moment the call ends, Claude scores your performance and builds a downloadable PDF action plan.",
   },
 ];
 
@@ -27,8 +29,11 @@ export default function LandingPage() {
   const router = useRouter();
   const [role, setRole] = useState<InterviewRole>(ROLES[0]);
   const [level, setLevel] = useState<ExperienceLevel>(LEVELS[1]);
+  const [cvText, setCvText] = useState<string | null>(null);
+  const [cvFileName, setCvFileName] = useState<string | null>(null);
 
   function startInterview() {
+    if (cvText) saveCvContext(cvText, cvFileName ?? "CV");
     const params = new URLSearchParams({ role, level });
     router.push(`/interview?${params.toString()}`);
   }
@@ -97,6 +102,16 @@ export default function LandingPage() {
               </option>
             ))}
           </select>
+
+          <div className="mt-4">
+            <CvUpload
+              onChange={(text, fileName) => {
+                setCvText(text);
+                setCvFileName(fileName);
+                if (!text) clearCvContext();
+              }}
+            />
+          </div>
 
           <button
             type="button"

@@ -23,13 +23,25 @@ Forsa AI (English Edition) is a focused, standalone MVP that does one thing well
 - **An instant, structured scorecard** — overall score, category breakdown (technical knowledge,
   problem solving, communication, confidence), concrete strengths/areas for improvement, and a
   hiring-style recommendation — generated automatically the moment the call ends.
+- **Optional CV grounding** — upload a PDF CV before the call and the interviewer asks questions
+  informed by it (real projects, tools, past roles) instead of generic ones, and the scorecard's
+  action plan references it directly.
+- **A downloadable action plan** — a personalized, phased skill-development plan (grounded in the
+  interview's actual weak points, and the candidate's CV when provided) is generated alongside the
+  scorecard and exportable as a branded, print-ready PDF.
 
-No sign-up, no database, no dashboard to configure — clone it, add one API key pair, and run a
-full mock interview.
+No sign-up, no database, no dashboard to configure — clone it, add your API keys, and run a
+full mock interview end to end, CV to PDF report.
 
 ## 2. Architecture
 
 ```
+ Landing page: upload CV (PDF, optional)
+        │  POST /api/cv-extract  (pdf-parse, server-side text extraction)
+        ▼
+ CV text handed to the browser, held in sessionStorage
+        │  (read once by the interview page, then cleared)
+        ▼
  Candidate's mic/speaker
         │  WebRTC audio
         ▼
@@ -37,22 +49,33 @@ full mock interview.
         │  - Speech-to-text: Deepgram
         │  - Reasoning: OpenAI GPT-4o (assistant defined entirely in code, lib/assistant.ts)
         │  - Text-to-speech: OpenAI TTS
+        │  - {{cvContext}} variable injected into the system prompt when a CV was uploaded
         ▼
  Live transcript, streamed back over Vapi's Web SDK
         │  (accumulated client-side as the call progresses)
         ▼
    Call ends  ──────────────────────────────────────────────►  POST /api/evaluate
                                                                        │
-                                                     Separate Claude call
-                                                     (this app's own Anthropic key),
-                                                     Structured Outputs against the
-                                                     rubric in lib/rubric.ts
+                                            (optional) VAPI_PRIVATE_KEY transcript
+                                            fallback via Vapi's REST API, in case the
+                                            client-side transcript came back thinner
+                                                                       │
+                                                                       ▼
+                                                     Claude call (this app's own
+                                                     Anthropic key), Structured Outputs
+                                                     against the rubric in lib/rubric.ts —
+                                                     scorecard + CV-grounded action plan
+                                                     in one response
                                                                        │
                                                                        ▼
                                                         Structured JSON scorecard
                                                                        │
                                                                        ▼
-                                                        <Scorecard /> component
+                                              <Scorecard /> component, incl. action plan
+                                                                       │
+                                                                       ▼
+                                          "Download PDF Report" → ScorecardPdfReport.tsx
+                                          (client-side html2canvas + jsPDF, no server call)
 ```
 
 Two separate model calls, deliberately, on two different providers:
@@ -60,14 +83,25 @@ Two separate model calls, deliberately, on two different providers:
 1. **The live interview** — run entirely by Vapi's own real-time voice pipeline against OpenAI
    GPT-4o. `lib/assistant.ts` defines the assistant (model, voice, transcriber, system prompt) as a
    plain config object handed to `vapi.start()` at call time — nothing is pre-created in a Vapi
-   dashboard, which is what lets this project run with just a Vapi **public** key.
+   dashboard, which is what lets this project run with just a Vapi **public** key. When a CV was
+   uploaded, its text is sanitized and capped (`sanitizeCvForVapiVariable()`, 1000 chars) and passed
+   in as the `{{cvContext}}` template variable via `assistantOverrides.variableValues`, so the
+   interviewer can ask about real projects/tools/roles instead of generic questions.
 2. **The evaluation** — once the call ends, this app POSTs the transcript it accumulated
-   client-side to its own `/api/evaluate` route, which makes a call to **Claude** (`claude-sonnet-5`,
+   client-side (plus the full, uncapped CV text and the Vapi call id, when available) to its own
+   `/api/evaluate` route, which makes a call to **Claude** (`claude-sonnet-5`,
    via the official [`@anthropic-ai/sdk`](https://www.npmjs.com/package/@anthropic-ai/sdk)) using
    [Structured Outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)
    (`output_config.format`, built from the same Zod schema in `lib/rubric.ts` via
    `client.messages.parse()`) so the response is guaranteed to match the `Scorecard` shape the UI
-   renders — no prompt-engineered "please return JSON" guessing.
+   renders, including a phased, CV-aware action plan — no prompt-engineered "please return JSON"
+   guessing.
+
+CV upload and PDF export are both handled without any extra backend: `/api/cv-extract` runs
+`pdf-parse` server-side (Next.js API route) purely to turn a PDF into text — nothing is written to
+disk or a database — and the PDF report is generated entirely in the browser
+(`components/ScorecardPdfReport.tsx`, `html2canvas` + `jspdf`) from the already-rendered scorecard,
+so there's no separate PDF-generation service to run or pay for.
 
 ## 3. Quickstart
 
@@ -101,6 +135,7 @@ See `.env.example`:
 |---|---|---|
 | `NEXT_PUBLIC_VAPI_PUBLIC_KEY` | Starts the WebRTC call client-side (`lib/vapi-client.ts`) | Yes — by design, Vapi's public key is scoped to call-starting only |
 | `ANTHROPIC_API_KEY` | The post-call evaluation request (`app/api/evaluate/route.ts`) | **No** — server-side only, never sent to the browser |
+| `VAPI_PRIVATE_KEY` | Optional server-side transcript fallback (`lib/vapi-server.ts`) — fetches the call's own recorded transcript from Vapi's REST API if the client-side one comes back thinner | **No** — server-side only, never sent to the browser |
 
 No database, no auth, no user accounts, and no production credentials of any kind are included in
 this repository.
@@ -136,6 +171,14 @@ same product family rather than a generic AI-demo skin:
   evaluator: score categories, ground every strength/improvement in something concrete from the
   transcript, and validate the AI's structured response against a schema before trusting it —
   rather than a single unstructured "how did they do?" prompt.
+- **The CV-upload → context-injection pattern** (`app/api/cv-extract/route.ts`, capping CV text at
+  1000 characters for the live Vapi call variable while passing the full text uncapped to the
+  evaluation prompt) mirrors the same split forsa-frontend's own Vapi sandbox feature
+  (`app/sandbox/vapi-interview`) already uses in production for `variableValues.cv_text`.
+- **The PDF report generation** (`components/ScorecardPdfReport.tsx`) reuses the exact
+  "zero-size hidden wrapper + per-page `html2canvas()` capture + `jsPDF({unit:"mm", format:"a4"})`"
+  technique from forsa-frontend's `components/reports/PremiumReportDownload.tsx`, so the exported
+  PDF matches the same production-proven rendering approach rather than a generic print stylesheet.
 
 ## 6. Known Limitations
 

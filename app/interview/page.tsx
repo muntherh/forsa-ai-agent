@@ -10,6 +10,7 @@ import Scorecard from "@/components/Scorecard";
 import TranscriptPanel from "@/components/TranscriptPanel";
 import VoiceWaveform from "@/components/VoiceWaveform";
 import { buildInterviewAssistant, buildInterviewVariableValues } from "@/lib/assistant";
+import { clearCvContext, loadCvContext } from "@/lib/cv-session";
 import { scorecardSchema } from "@/lib/rubric";
 import { getVapiClient, isVapiConfigured } from "@/lib/vapi-client";
 import type {
@@ -52,6 +53,7 @@ function InterviewSession() {
   const [transcript, setTranscript] = useState<TranscriptTurn[]>([]);
   const [scorecard, setScorecard] = useState<ScorecardData | null>(null);
   const [scorecardStatus, setScorecardStatus] = useState<"idle" | "waiting" | "ready" | "error" | "too-short">("idle");
+  const [cvFileName, setCvFileName] = useState<string | null>(null);
 
   const hasEndedRef = useRef(false);
   // Authoritative transcript for the evaluation request: call-end fires a
@@ -59,6 +61,27 @@ function InterviewSession() {
   // read the live `transcript` state without going stale. The ref is
   // updated in the same tick as every `setTranscript` call, so it never is.
   const transcriptRef = useRef<TranscriptTurn[]>([]);
+  // Read once on mount (see the effect below) and reused by both handleStart
+  // (the live call's variableValues) and runEvaluation (the full, uncapped
+  // text sent to Claude) — a ref because neither of those callbacks needs
+  // to re-run when it's set, it just needs the current value when invoked.
+  const cvTextRef = useRef<string | null>(null);
+  // Set once vapi.start() resolves with the call's own id — used only as
+  // the server-side transcript-fallback key (see lib/vapi-server.ts);
+  // the live call itself never needs its own id.
+  const callIdRef = useRef<string | null>(null);
+
+  // sessionStorage's CV context is single-use: read it once here, then
+  // clear it immediately so a later visit to "/" that doesn't re-attach a
+  // CV can never silently reuse a stale one from a previous interview.
+  useEffect(() => {
+    const stored = loadCvContext();
+    if (stored) {
+      cvTextRef.current = stored.text;
+      setCvFileName(stored.fileName);
+      clearCvContext();
+    }
+  }, []);
 
   const assistantVolumeRaw = useMotionValue(0);
   const assistantVolume = useSpring(assistantVolumeRaw, { stiffness: 60, damping: 20 });
@@ -73,7 +96,13 @@ function InterviewSession() {
       const res = await fetch("/api/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript: transcriptRef.current, role, experienceLevel: level }),
+        body: JSON.stringify({
+          transcript: transcriptRef.current,
+          role,
+          experienceLevel: level,
+          cvText: cvTextRef.current ?? undefined,
+          callId: callIdRef.current ?? undefined,
+        }),
       });
       const data = await res.json().catch(() => null);
 
@@ -180,11 +209,17 @@ function InterviewSession() {
     setTranscript([]);
     setScorecard(null);
     setScorecardStatus("idle");
+    callIdRef.current = null;
     try {
       const vapi = getVapiClient();
       const assistant = buildInterviewAssistant();
-      const variableValues = buildInterviewVariableValues({ role, experienceLevel: level });
-      await vapi.start(assistant, { variableValues });
+      const variableValues = buildInterviewVariableValues({
+        role,
+        experienceLevel: level,
+        cvText: cvTextRef.current ?? undefined,
+      });
+      const call = await vapi.start(assistant, { variableValues });
+      callIdRef.current = call?.id ?? null;
     } catch (err) {
       setErrorMessage(describeVapiError(err));
       setStatus("error");
@@ -231,9 +266,16 @@ function InterviewSession() {
           <Image src="/logo.png" alt="Forsa" width={24} height={24} className="rounded-full border border-line" />
           ← Exit
         </button>
-        <span className="rounded-full border border-line bg-white px-3 py-1 text-xs font-medium text-muted">
-          {role} · {level}
-        </span>
+        <div className="flex items-center gap-2">
+          {cvFileName && (
+            <span className="rounded-full border border-teal/30 bg-teal/10 px-3 py-1 text-xs font-medium text-teal-dark">
+              CV attached
+            </span>
+          )}
+          <span className="rounded-full border border-line bg-white px-3 py-1 text-xs font-medium text-muted">
+            {role} · {level}
+          </span>
+        </div>
       </div>
 
       <div className="mt-8">
@@ -258,7 +300,9 @@ function InterviewSession() {
 
       {status === "ended" && (
         <div className="mt-8">
-          {scorecardStatus === "ready" && scorecard && <Scorecard data={scorecard} />}
+          {scorecardStatus === "ready" && scorecard && (
+            <Scorecard data={scorecard} role={role} experienceLevel={level} />
+          )}
 
           {scorecardStatus === "waiting" && (
             <div className="flex flex-col items-center gap-3 rounded-card border border-line bg-white p-8 text-center shadow-sm">

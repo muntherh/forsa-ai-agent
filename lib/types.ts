@@ -12,6 +12,8 @@ export type ExperienceLevel = "Entry-level" | "Mid-level" | "Senior";
 export interface InterviewConfig {
   role: InterviewRole;
   experienceLevel: ExperienceLevel;
+  /** Full extracted CV text, if the candidate uploaded one. Optional — the interview works fine without it. */
+  cvText?: string;
 }
 
 export interface TranscriptTurn {
@@ -28,6 +30,18 @@ export interface CategoryScores {
 
 export type Recommendation = "Strong Hire" | "Hire" | "No Hire" | "Strong No Hire";
 
+export interface ActionPlanPhase {
+  title: string;
+  estimatedDuration: string;
+  tasks: string[];
+}
+
+export interface ActionPlan {
+  title: string;
+  summary: string;
+  phases: ActionPlanPhase[];
+}
+
 export interface Scorecard {
   overallScore: number;
   recommendation: Recommendation;
@@ -35,4 +49,5 @@ export interface Scorecard {
   strengths: string[];
   areasForImprovement: string[];
   summary: string;
+  actionPlan: ActionPlan;
 }

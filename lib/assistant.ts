@@ -23,6 +23,13 @@ export type InterviewVariableValues = StartOverrides["variableValues"];
 const SYSTEM_PROMPT = `You are Ava, a senior technical interviewer conducting a realistic mock
 interview for a {{experienceLevel}} {{role}} candidate.
 
+## Candidate CV context
+{{cvContext}}
+The block above may be empty if the candidate chose not to upload a CV — that's expected and
+fine, just run a general interview for the role instead. When it IS present, ground your opening
+question and at least one technical question in something specific from it (a real project, tool,
+or role they listed) rather than a purely generic opener.
+
 ## Your goal
 Run a focused, realistic 6-8 question interview that mixes:
 - 1 warm opening question (a brief introduction / walk-through of their background)
@@ -105,10 +112,29 @@ export function buildInterviewAssistant(): InterviewAssistantConfig {
   };
 }
 
+// Vapi's call-start request carries assistantOverrides.variableValues in its
+// payload. A raw PDF text extraction can run several thousand characters
+// with heavy whitespace noise from page breaks/columns — a plausible way to
+// get a rejected call start. Only the value injected into the LIVE call is
+// capped here; app/api/evaluate/route.ts sends the full, uncapped CV text
+// to Claude for the post-call evaluation, where there's no such concern.
+const VAPI_CV_VARIABLE_MAX_CHARS = 1000;
+
+function sanitizeCvForVapiVariable(raw: string): string {
+  const cleaned = raw
+    .replace(/["'“”‘’]/g, " ")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned.length > VAPI_CV_VARIABLE_MAX_CHARS ? cleaned.slice(0, VAPI_CV_VARIABLE_MAX_CHARS).trim() : cleaned;
+}
+
 /** Values substituted into the `{{...}}` placeholders in SYSTEM_PROMPT above. */
 export function buildInterviewVariableValues(config: InterviewConfig): InterviewVariableValues {
   return {
     role: config.role,
     experienceLevel: config.experienceLevel,
+    cvContext: config.cvText ? sanitizeCvForVapiVariable(config.cvText) : "",
   };
 }
