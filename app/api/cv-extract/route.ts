@@ -1,3 +1,4 @@
+import "@/lib/pdf-node-polyfills"; // must run before pdf-parse is imported
 import { PDFParse } from "pdf-parse";
 import { NextRequest, NextResponse } from "next/server";
 
