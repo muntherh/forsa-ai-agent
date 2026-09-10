@@ -4,13 +4,10 @@ import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 // Same brand typefaces as forsa-frontend (Almarai display + IBM Plex body +
-// IBM Plex Mono for numbers/scores). This app's UI is English-only, but the
-// hero renders the literal brand name "فرصة" as a centerpiece (BrandMark) —
-// the "arabic" subset is loaded too so those glyphs actually render in
-// Almarai instead of silently falling back to the OS's default Arabic font
-// (a latin-only subset file has no Arabic glyphs at all).
+// IBM Plex Mono for numbers/scores), loaded on the "latin" subset only —
+// this edition of the app is English-only, brand name included.
 const almarai = Almarai({
-  subsets: ["latin", "arabic"],
+  subsets: ["latin"],
   weight: ["400", "700", "800"],
   variable: "--font-almarai",
 });
@@ -38,10 +35,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${almarai.variable} ${plexSans.variable} ${plexMono.variable}`}>
+    // `dark` is rendered server-side because dark is the default theme, so
+    // the common case needs no client-side correction at all. The init script
+    // only removes it for visitors who explicitly chose light, which is the
+    // one case suppressHydrationWarning covers.
+    <html
+      lang="en"
+      className={`dark ${almarai.variable} ${plexSans.variable} ${plexMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
-        {/* Must run before first paint to avoid a light-then-dark flash for
-            a visitor who previously chose dark mode — see lib/theme.ts. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="min-h-screen bg-bg font-body text-navy antialiased transition-colors duration-300 dark:bg-obsidian dark:text-dark-text">

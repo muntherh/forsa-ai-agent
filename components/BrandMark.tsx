@@ -1,81 +1,45 @@
 "use client";
 
-import { motion, useReducedMotion, type Variants } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import CinematicText from "./CinematicText";
 
 /**
- * The "فرصة" hero centerpiece.
+ * The hero wordmark: "Forsa", English only.
  *
- * Deliberately NOT split into per-character spans: Arabic is a cursive,
- * contextual script — each letter's glyph shape depends on its neighbors
- * (initial/medial/final/isolated forms), and browsers only apply that
- * shaping within a single, unbroken text run. Splitting "فرصة" into four
- * separate <span> letters (the obvious way to get a "staggered letter-by-
- * letter" reveal) would render each letter in its isolated form — visibly
- * broken Arabic, not a stylistic choice. Instead the whole word stays one
- * text node (correct shaping guaranteed) and "assembles" via an animated
- * clip-path wipe that sweeps right-to-left — matching Arabic's own reading
- * direction — combined with a blur-to-sharp focus pull.
- *
- * The English "Forsa AI" wordmark underneath has no such constraint, so it
- * gets a genuine per-letter spring stagger.
+ * The letters get the same blur-to-focus spring entrance as the headline,
+ * finished in a high-contrast white-to-slate gradient. The glow behind it is
+ * a separate blurred layer rather than a text-shadow, so it reads as light
+ * spilling off the type instead of a hard halo tracing the glyph edges.
  */
-
-const WORDMARK = "Forsa AI";
-
-const wordmarkContainer: Variants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.045, delayChildren: 0.5 } },
-};
-
-const wordmarkLetter: Variants = {
-  hidden: { opacity: 0, y: 14, scale: 0.85 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: { type: "spring", damping: 20, stiffness: 300 },
-  },
-};
-
 export default function BrandMark() {
   const reduceMotion = useReducedMotion();
 
   return (
     <div className="relative flex flex-col items-center">
-      {/* Ambient glow behind the Arabic centerpiece — a blurred, pulsing
-          duplicate rather than a box-shadow, so it reads as light rather
-          than a flat tinted rectangle. Purely decorative: aria-hidden. */}
       <motion.div
         aria-hidden
-        initial={reduceMotion ? undefined : { opacity: 0, scale: 0.7 }}
+        initial={reduceMotion ? false : { opacity: 0, scale: 0.75 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.9, ease: "easeOut" }}
-        className="pointer-events-none absolute -top-10 h-40 w-64 animate-glow-pulse rounded-full bg-teal/25 blur-3xl dark:bg-indigo/30"
+        transition={{ duration: 1.1, ease: "easeOut" }}
+        className="pointer-events-none absolute -top-8 h-36 w-[min(420px,80vw)] animate-glow-pulse rounded-full bg-teal/20 blur-[70px] dark:bg-teal-glow/25"
       />
 
-      <motion.div
-        dir="rtl"
-        lang="ar"
-        initial={reduceMotion ? undefined : { clipPath: "inset(0 0 0 100%)", filter: "blur(10px)", opacity: 0 }}
-        animate={{ clipPath: "inset(0 0 0 0%)", filter: "blur(0px)", opacity: 1 }}
-        transition={{ type: "spring", damping: 20, stiffness: 300, delay: 0.1 }}
-        className="relative bg-gradient-to-l from-navy via-blue to-teal bg-clip-text font-display text-7xl font-extrabold leading-none text-transparent sm:text-8xl dark:from-indigo dark:via-indigo-glow dark:to-emerald-glow"
-      >
-        فرصة
-      </motion.div>
+      <CinematicText
+        as="h1"
+        text="Forsa"
+        delay={0.15}
+        stagger={0.075}
+        className="relative font-display text-7xl font-extrabold leading-[1.05] tracking-tight sm:text-8xl"
+        letterClassName="bg-gradient-to-b from-navy via-navy to-blue bg-clip-text text-transparent dark:from-white dark:via-white dark:to-slate-400"
+      />
 
       <motion.p
-        variants={reduceMotion ? undefined : wordmarkContainer}
-        initial="hidden"
-        animate="visible"
-        aria-label={WORDMARK}
-        className="mt-3 flex font-display text-sm font-bold uppercase tracking-[0.35em] text-muted dark:text-dark-muted"
+        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 100, damping: 20, delay: 0.75 }}
+        className="mt-4 font-display text-[11px] font-bold uppercase tracking-[0.42em] text-teal-dark dark:text-teal-glow"
       >
-        {WORDMARK.split("").map((char, i) => (
-          <motion.span key={i} aria-hidden variants={reduceMotion ? undefined : wordmarkLetter}>
-            {char === " " ? " " : char}
-          </motion.span>
-        ))}
+        AI Interview Studio
       </motion.p>
     </div>
   );

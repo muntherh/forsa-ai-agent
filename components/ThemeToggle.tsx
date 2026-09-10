@@ -5,11 +5,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { applyTheme, getStoredTheme, type Theme } from "@/lib/theme";
 
 export default function ThemeToggle() {
-  // Starts "light" (matches the server-rendered markup and the no-selection
-  // default) and syncs to the real stored value on mount — the blocking
-  // <script> in app/layout.tsx already applied the class before paint, this
-  // just brings this button's own icon state in sync with it.
-  const [theme, setTheme] = useState<Theme>("light");
+  // Starts "dark" — the app's default theme, so this matches the
+  // server-rendered markup — then syncs to the real stored value on mount.
+  // The blocking <script> in app/layout.tsx has already applied the class
+  // before paint; this only brings the button's icon in sync with it.
+  const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
     setTheme(getStoredTheme());
@@ -26,7 +26,7 @@ export default function ThemeToggle() {
       type="button"
       onClick={toggle}
       aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-      className="relative flex h-9 w-9 items-center justify-center rounded-full border border-line bg-white text-navy transition-colors hover:border-blue dark:border-dark-border dark:bg-dark-surface dark:text-dark-text dark:hover:border-indigo"
+      className="relative flex h-9 w-9 items-center justify-center rounded-full border border-line bg-white/70 text-navy backdrop-blur-xl transition-colors hover:border-blue dark:border-white/10 dark:bg-white/[0.04] dark:text-dark-text dark:hover:border-teal-glow/60"
     >
       <AnimatePresence mode="wait" initial={false}>
         {theme === "dark" ? (

@@ -1,15 +1,14 @@
 import type { Config } from "tailwindcss";
 
-// Forsa's brand palette, typography, and radii — adapted 1:1 from
-// forsa-frontend/tailwind.config.ts so this English-only sibling app reads
-// as unmistakably the same product family.
+// Forsa's brand palette and typography, adapted from
+// forsa-frontend/tailwind.config.ts. The light theme is Forsa's real
+// production identity; the dark theme (now the default — see lib/theme.ts)
+// is a cinematic obsidian treatment built on the SAME brand teal rather than
+// an unrelated accent, so both themes read as one product.
 const config: Config = {
-  // Class-based (not "media") so a user's explicit toggle (see lib/theme.ts)
-  // always wins over their OS preference — the landing page defaults to
-  // Forsa's real light brand regardless of system theme, exactly like
-  // forsa-frontend itself (which has no dark mode at all). Dark mode here is
-  // an opt-in alternate theme for this app only, applied via a `dark` class
-  // on <html>.
+  // Class-based (not "media") so an explicit choice always wins over the OS
+  // preference, in both directions — the app opens cinematic-dark by default
+  // and the toggle can pin it to Forsa's light brand.
   darkMode: "class",
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
   theme: {
@@ -17,7 +16,7 @@ const config: Config = {
       colors: {
         navy: "#0B2E4A",
         blue: { DEFAULT: "#2470B3", dark: "#1B5A8C" },
-        teal: "#1FA98A",
+        teal: { DEFAULT: "#1FA98A", glow: "#2FE0B6" },
         amber: "#F2A93B",
         bg: "#F6F8FA",
         line: "#E3E9EF",
@@ -28,19 +27,17 @@ const config: Config = {
         // forsa-frontend settled on after its own contrast pass.
         "teal-dark": "#0F6B57",
         "amber-dark": "#8A5A0C",
-        // Dark-theme tokens (opt-in, see darkMode above) — a distinct
-        // obsidian/indigo/emerald palette rather than a darkened version of
-        // the light brand tokens, since it's an intentionally different,
-        // higher-contrast surface (deep charcoal + neon accents) rather than
-        // an inverted version of the same design.
-        obsidian: "#0a0a0a",
-        "dark-surface": "#141417",
-        "dark-surface-raised": "#1c1c20",
-        "dark-border": "#27272a",
-        "dark-muted": "#a1a1aa",
-        "dark-text": "#fafafa",
-        indigo: { DEFAULT: "#6366f1", glow: "#818cf8" },
-        emerald: { DEFAULT: "#10b981", glow: "#34d399" },
+        // Dark theme: obsidian carrying a midnight-navy tint pulled from the
+        // brand navy, so the dark surfaces read as "Forsa at night" rather
+        // than neutral grey. Emerald is the brighter end of the teal ramp,
+        // used only for glow/active states.
+        obsidian: "#05080F",
+        "dark-surface": "#0A1018",
+        "dark-surface-raised": "#111A25",
+        "dark-border": "#1E2A38",
+        "dark-muted": "#8697A8",
+        "dark-text": "#F4F8FB",
+        emerald: { DEFAULT: "#12C99B", glow: "#34E7BE" },
       },
       fontFamily: {
         // forsa-frontend pairs Almarai (display) with IBM Plex Sans Arabic
@@ -68,25 +65,20 @@ const config: Config = {
           "0%": { opacity: "0", transform: "translateY(4px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
-        // Continuous ambient loops (AmbientBackground / BrandMark glow) run
-        // as plain CSS animations rather than framer-motion `repeat:
-        // Infinity` — a GPU-composited CSS animation costs nothing on the
-        // main thread, unlike a perpetually-ticking JS animation loop.
-        drift: {
-          "0%, 100%": { transform: "translate(0, 0)" },
-          "50%": { transform: "translate(var(--drift-x, 12px), var(--drift-y, -16px))" },
-        },
+        // Continuous ambient loops run as plain CSS animations rather than
+        // framer-motion `repeat: Infinity` wherever the element isn't already
+        // inside a motion tree — a GPU-composited CSS animation costs nothing
+        // on the main thread, unlike a perpetually-ticking JS animation loop.
         "glow-pulse": {
-          "0%, 100%": { opacity: "0.55", transform: "scale(1)" },
-          "50%": { opacity: "0.9", transform: "scale(1.06)" },
+          "0%, 100%": { opacity: "0.5", transform: "scale(1)" },
+          "50%": { opacity: "0.85", transform: "scale(1.05)" },
         },
       },
       animation: {
         "fade-in-down": "fade-in-down 250ms cubic-bezier(0.23, 1, 0.32, 1)",
         "fade-in-scale": "fade-in-scale 300ms cubic-bezier(0.23, 1, 0.32, 1)",
         "fade-in-up": "fade-in-up 300ms cubic-bezier(0.23, 1, 0.32, 1) both",
-        drift: "drift 9s ease-in-out infinite",
-        "glow-pulse": "glow-pulse 5s ease-in-out infinite",
+        "glow-pulse": "glow-pulse 6s ease-in-out infinite",
       },
     },
   },

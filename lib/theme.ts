@@ -1,9 +1,14 @@
 /**
- * Dark mode is an opt-in alternate theme (see tailwind.config.ts's
- * `darkMode: "class"`) — Forsa's real light brand is always the default,
- * regardless of the visitor's OS preference. The choice is remembered in
- * localStorage (not sessionStorage: a deliberate visual preference should
- * survive across visits, unlike the single-use interview setup).
+ * The app opens in its cinematic dark theme; light mode is Forsa's real
+ * production brand palette, kept as an explicit opt-out via the header
+ * toggle. The choice is remembered in localStorage (not sessionStorage: a
+ * deliberate visual preference should survive across visits, unlike the
+ * single-use interview setup).
+ *
+ * Dark being the DEFAULT is why the server renders `<html class="dark">` and
+ * the init script below only ever *removes* that class: the no-preference
+ * case then matches the server markup exactly, so there is nothing for
+ * hydration to reconcile.
  */
 
 const STORAGE_KEY = "forsa_theme";
@@ -14,12 +19,11 @@ function isBrowser(): boolean {
 }
 
 export function getStoredTheme(): Theme {
-  if (!isBrowser()) return "light";
+  if (!isBrowser()) return "dark";
   try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    return stored === "dark" ? "dark" : "light";
+    return window.localStorage.getItem(STORAGE_KEY) === "light" ? "light" : "dark";
   } catch {
-    return "light";
+    return "dark";
   }
 }
 
@@ -37,8 +41,7 @@ export function applyTheme(theme: Theme): void {
 
 /**
  * Inlined into app/layout.tsx's <head> as a blocking <script> (not a React
- * effect) so the `dark` class is applied before first paint — otherwise the
- * page would flash light-then-dark for a returning visitor who chose dark
- * mode.
+ * effect) so the theme is settled before first paint — otherwise a visitor
+ * who chose light mode would see a flash of the dark theme on every load.
  */
-export const THEME_INIT_SCRIPT = `(function(){try{var t=window.localStorage.getItem("${STORAGE_KEY}");if(t==="dark"){document.documentElement.classList.add("dark");}}catch(e){}})();`;
+export const THEME_INIT_SCRIPT = `(function(){try{if(window.localStorage.getItem("${STORAGE_KEY}")==="light"){document.documentElement.classList.remove("dark");}}catch(e){}})();`;

@@ -78,7 +78,7 @@ export default function CvUpload({ onChange }: CvUploadProps) {
 
   return (
     <div>
-      <label htmlFor={inputId} className="block text-xs font-semibold uppercase tracking-wide text-muted dark:text-dark-muted">
+      <label htmlFor={inputId} className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-muted dark:text-dark-muted">
         CV (optional)
       </label>
       <input
@@ -122,10 +122,10 @@ export default function CvUpload({ onChange }: CvUploadProps) {
               const file = event.dataTransfer.files?.[0];
               if (file) void handleFile(file);
             }}
-            className={`mt-2 flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed px-4 py-5 text-center transition-colors ${
+            className={`mt-2 flex cursor-pointer flex-col items-center gap-1.5 rounded-2xl border border-dashed px-4 py-6 text-center backdrop-blur-xl transition-colors ${
               status === "dragging"
-                ? "border-blue bg-blue/5 shadow-[0_0_0_4px_rgba(36,112,179,0.12)] dark:border-indigo dark:bg-indigo/10 dark:shadow-[0_0_24px_rgba(99,102,241,0.35)]"
-                : "border-line bg-bg hover:border-blue hover:shadow-[0_0_0_4px_rgba(36,112,179,0.08)] dark:border-dark-border dark:bg-dark-surface dark:hover:border-indigo dark:hover:shadow-[0_0_20px_rgba(99,102,241,0.25)]"
+                ? "border-blue bg-blue/5 shadow-[0_0_0_4px_rgba(36,112,179,0.12)] dark:border-teal-glow dark:bg-teal-glow/[0.07] dark:shadow-[0_0_30px_-4px_rgba(47,224,182,0.45)]"
+                : "border-line bg-white/50 hover:border-blue hover:shadow-[0_0_0_4px_rgba(36,112,179,0.08)] dark:border-white/15 dark:bg-white/[0.02] dark:hover:border-teal-glow/60 dark:hover:shadow-[0_0_24px_-6px_rgba(47,224,182,0.35)]"
             }`}
           >
             <motion.svg
@@ -159,9 +159,9 @@ export default function CvUpload({ onChange }: CvUploadProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="mt-2 flex items-center gap-2.5 rounded-xl border border-line bg-bg px-4 py-3.5 dark:border-dark-border dark:bg-dark-surface"
+            className="mt-2 flex items-center gap-2.5 rounded-2xl border border-line bg-white/50 px-4 py-3.5 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.03]"
           >
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-blue dark:border-dark-border dark:border-t-indigo" />
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-blue dark:border-white/15 dark:border-t-teal-glow" />
             <span className="truncate text-sm text-muted dark:text-dark-muted">Reading {fileName}…</span>
           </motion.div>
         )}
@@ -173,7 +173,7 @@ export default function CvUpload({ onChange }: CvUploadProps) {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
             transition={SPRING}
-            className="mt-2 flex items-center justify-between gap-2.5 rounded-xl border border-teal/30 bg-teal/10 px-4 py-3 dark:border-emerald/30 dark:bg-emerald/10"
+            className="mt-2 flex items-center justify-between gap-2.5 rounded-2xl border border-teal/30 bg-teal/10 px-4 py-3 backdrop-blur-xl dark:border-teal-glow/25 dark:bg-teal-glow/[0.08]"
           >
             <div className="flex min-w-0 items-center gap-2.5">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden className="flex-shrink-0">
@@ -183,10 +183,10 @@ export default function CvUpload({ onChange }: CvUploadProps) {
                   strokeWidth="2.4"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="text-teal-dark dark:text-emerald-glow"
+                  className="text-teal-dark dark:text-teal-glow"
                 />
               </svg>
-              <span className="truncate text-sm font-medium text-teal-dark dark:text-emerald-glow">{fileName}</span>
+              <span className="truncate text-sm font-medium text-teal-dark dark:text-teal-glow">{fileName}</span>
             </div>
             <button
               type="button"

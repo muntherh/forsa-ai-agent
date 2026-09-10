@@ -245,20 +245,20 @@ export default function InterviewPage() {
         <h1 className="font-display text-xl font-bold text-navy dark:text-dark-text">Vapi is not configured</h1>
         <p className="mt-3 text-sm text-muted dark:text-dark-muted">
           Add{" "}
-          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-indigo-glow">
+          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-teal-glow">
             NEXT_PUBLIC_VAPI_PUBLIC_KEY
           </code>{" "}
           to a{" "}
-          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-indigo-glow">
+          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-teal-glow">
             .env.local
           </code>{" "}
           file (see{" "}
-          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-indigo-glow">
+          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-teal-glow">
             .env.example
           </code>
           ) and restart the dev server.
         </p>
-        <Link href="/" className="mt-6 text-sm font-semibold text-blue hover:underline dark:text-indigo-glow">
+        <Link href="/" className="mt-6 text-sm font-semibold text-blue hover:underline dark:text-teal-glow">
           ← Back to start
         </Link>
       </main>
@@ -278,7 +278,7 @@ export default function InterviewPage() {
         </button>
         <div className="flex items-center gap-2">
           {cvFileName && (
-            <span className="rounded-full border border-teal/30 bg-teal/10 px-3 py-1 text-xs font-medium text-teal-dark dark:border-emerald/30 dark:bg-emerald/10 dark:text-emerald-glow">
+            <span className="rounded-full border border-teal/30 bg-teal/10 px-3 py-1 text-xs font-medium text-teal-dark dark:border-teal-glow/25 dark:bg-teal-glow/10 dark:text-teal-glow">
               CV attached
             </span>
           )}
@@ -316,7 +316,7 @@ export default function InterviewPage() {
 
           {scorecardStatus === "waiting" && (
             <div className="flex flex-col items-center gap-3 rounded-card border border-line bg-white p-8 text-center shadow-sm dark:border-dark-border dark:bg-dark-surface">
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-blue dark:border-dark-border dark:border-t-indigo" />
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-blue dark:border-dark-border dark:border-t-teal-glow" />
               <p className="text-sm text-muted dark:text-dark-muted">Generating your interview scorecard…</p>
             </div>
           )}
