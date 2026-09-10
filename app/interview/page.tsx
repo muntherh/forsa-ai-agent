@@ -1,28 +1,25 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useMotionValue, useSpring } from "framer-motion";
 import CallControls from "@/components/CallControls";
 import Scorecard from "@/components/Scorecard";
 import TranscriptPanel from "@/components/TranscriptPanel";
 import VoiceWaveform from "@/components/VoiceWaveform";
 import { buildInterviewAssistant, buildInterviewVariableValues } from "@/lib/assistant";
-import { clearCvContext, loadCvContext } from "@/lib/cv-session";
+import { clearInterviewSetup, loadInterviewSetup } from "@/lib/interview-session";
 import { scorecardSchema } from "@/lib/rubric";
 import { getVapiClient, isVapiConfigured } from "@/lib/vapi-client";
-import type {
-  CallStatus,
-  ExperienceLevel,
-  InterviewRole,
-  Scorecard as ScorecardData,
-  TranscriptTurn,
-} from "@/lib/types";
+import type { CallStatus, Scorecard as ScorecardData, TranscriptTurn } from "@/lib/types";
 
-const DEFAULT_ROLE: InterviewRole = "Software Engineer";
-const DEFAULT_LEVEL: ExperienceLevel = "Mid-level";
+// Fallback only for the (unsupported) case of navigating straight to
+// /interview without going through the landing page's setup — there is no
+// sessionStorage payload to read in that case.
+const DEFAULT_ROLE = "Software Engineer";
+const DEFAULT_LEVEL = "Mid-Level";
 
 // A real interview needs at least this many turns before an evaluation is
 // meaningful — guards against scoring a call that ended in the first few
@@ -40,11 +37,10 @@ function describeVapiError(err: unknown): string {
   return "An unexpected error occurred while connecting to the interview call.";
 }
 
-function InterviewSession() {
+export default function InterviewPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const role = (searchParams.get("role") as InterviewRole) || DEFAULT_ROLE;
-  const level = (searchParams.get("level") as ExperienceLevel) || DEFAULT_LEVEL;
+  const [role, setRole] = useState(DEFAULT_ROLE);
+  const [level, setLevel] = useState(DEFAULT_LEVEL);
 
   const [configured] = useState(isVapiConfigured());
   const [status, setStatus] = useState<CallStatus>("idle");
@@ -71,15 +67,20 @@ function InterviewSession() {
   // the live call itself never needs its own id.
   const callIdRef = useRef<string | null>(null);
 
-  // sessionStorage's CV context is single-use: read it once here, then
-  // clear it immediately so a later visit to "/" that doesn't re-attach a
-  // CV can never silently reuse a stale one from a previous interview.
+  // sessionStorage's interview setup is single-use: read it once here, then
+  // clear it immediately so a later visit to "/" that doesn't go through
+  // setup again can never silently reuse a stale role/CV from a previous
+  // interview.
   useEffect(() => {
-    const stored = loadCvContext();
+    const stored = loadInterviewSetup();
     if (stored) {
-      cvTextRef.current = stored.text;
-      setCvFileName(stored.fileName);
-      clearCvContext();
+      setRole(stored.role);
+      setLevel(stored.experienceLevel);
+      if (stored.cvText) {
+        cvTextRef.current = stored.cvText;
+        setCvFileName(stored.cvFileName ?? "CV");
+      }
+      clearInterviewSetup();
     }
   }, []);
 
@@ -240,15 +241,24 @@ function InterviewSession() {
 
   if (!configured) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center px-6 text-center">
-        <h1 className="font-display text-xl font-bold text-navy">Vapi is not configured</h1>
-        <p className="mt-3 text-sm text-muted">
-          Add <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark">NEXT_PUBLIC_VAPI_PUBLIC_KEY</code> to a{" "}
-          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark">.env.local</code> file (see{" "}
-          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark">.env.example</code>) and restart the dev
-          server.
+      <main className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center px-6 text-center dark:bg-obsidian">
+        <h1 className="font-display text-xl font-bold text-navy dark:text-dark-text">Vapi is not configured</h1>
+        <p className="mt-3 text-sm text-muted dark:text-dark-muted">
+          Add{" "}
+          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-indigo-glow">
+            NEXT_PUBLIC_VAPI_PUBLIC_KEY
+          </code>{" "}
+          to a{" "}
+          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-indigo-glow">
+            .env.local
+          </code>{" "}
+          file (see{" "}
+          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-indigo-glow">
+            .env.example
+          </code>
+          ) and restart the dev server.
         </p>
-        <Link href="/" className="mt-6 text-sm font-semibold text-blue hover:underline">
+        <Link href="/" className="mt-6 text-sm font-semibold text-blue hover:underline dark:text-indigo-glow">
           ← Back to start
         </Link>
       </main>
@@ -256,23 +266,23 @@ function InterviewSession() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col px-6 py-12 sm:py-16">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col px-6 py-12 dark:bg-obsidian sm:py-16">
       <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={() => router.push("/")}
-          className="flex items-center gap-2 text-sm font-semibold text-muted transition hover:text-navy"
+          className="flex items-center gap-2 text-sm font-semibold text-muted transition hover:text-navy dark:text-dark-muted dark:hover:text-dark-text"
         >
-          <Image src="/logo.png" alt="Forsa" width={24} height={24} className="rounded-full border border-line" />
+          <Image src="/logo.png" alt="Forsa" width={24} height={24} className="rounded-full border border-line dark:border-dark-border" />
           ← Exit
         </button>
         <div className="flex items-center gap-2">
           {cvFileName && (
-            <span className="rounded-full border border-teal/30 bg-teal/10 px-3 py-1 text-xs font-medium text-teal-dark">
+            <span className="rounded-full border border-teal/30 bg-teal/10 px-3 py-1 text-xs font-medium text-teal-dark dark:border-emerald/30 dark:bg-emerald/10 dark:text-emerald-glow">
               CV attached
             </span>
           )}
-          <span className="rounded-full border border-line bg-white px-3 py-1 text-xs font-medium text-muted">
+          <span className="rounded-full border border-line bg-white px-3 py-1 text-xs font-medium text-muted dark:border-dark-border dark:bg-dark-surface dark:text-dark-muted">
             {role} · {level}
           </span>
         </div>
@@ -287,7 +297,7 @@ function InterviewSession() {
       </div>
 
       {errorMessage && (
-        <p className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-600">
+        <p className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
           {errorMessage}
         </p>
       )}
@@ -305,14 +315,14 @@ function InterviewSession() {
           )}
 
           {scorecardStatus === "waiting" && (
-            <div className="flex flex-col items-center gap-3 rounded-card border border-line bg-white p-8 text-center shadow-sm">
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-blue" />
-              <p className="text-sm text-muted">Generating your interview scorecard…</p>
+            <div className="flex flex-col items-center gap-3 rounded-card border border-line bg-white p-8 text-center shadow-sm dark:border-dark-border dark:bg-dark-surface">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-blue dark:border-dark-border dark:border-t-indigo" />
+              <p className="text-sm text-muted dark:text-dark-muted">Generating your interview scorecard…</p>
             </div>
           )}
 
           {scorecardStatus === "error" && (
-            <div className="rounded-card border border-amber/30 bg-amber/10 p-6 text-center">
+            <div className="rounded-card border border-amber/30 bg-amber/10 p-6 text-center dark:border-amber/20 dark:bg-amber/10">
               <p className="text-sm text-amber-dark">
                 We couldn&apos;t generate a scorecard for this interview. Your transcript above is still available —
                 please try another practice interview.
@@ -321,8 +331,8 @@ function InterviewSession() {
           )}
 
           {scorecardStatus === "too-short" && (
-            <div className="rounded-card border border-line bg-white p-6 text-center shadow-sm">
-              <p className="text-sm text-muted">
+            <div className="rounded-card border border-line bg-white p-6 text-center shadow-sm dark:border-dark-border dark:bg-dark-surface">
+              <p className="text-sm text-muted dark:text-dark-muted">
                 That call ended too early to generate a meaningful scorecard. Try a full practice interview of at
                 least a few questions.
               </p>
@@ -331,13 +341,5 @@ function InterviewSession() {
         </div>
       )}
     </main>
-  );
-}
-
-export default function InterviewPage() {
-  return (
-    <Suspense fallback={null}>
-      <InterviewSession />
-    </Suspense>
   );
 }

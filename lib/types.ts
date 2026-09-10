@@ -1,13 +1,13 @@
 export type CallStatus = "idle" | "connecting" | "speaking" | "listening" | "ended" | "error";
 
-export type InterviewRole =
-  | "Software Engineer"
-  | "Data Scientist"
-  | "Product Manager"
-  | "DevOps Engineer"
-  | "UX Designer";
-
-export type ExperienceLevel = "Entry-level" | "Mid-level" | "Senior";
+// Free text, not a fixed union: both are only ever substituted as plain
+// strings into the Vapi system prompt (lib/assistant.ts) and the Claude
+// evaluation prompt (lib/rubric.ts) — nothing downstream branches on a
+// specific value. lib/roles.ts defines the curated categories/labels and
+// EXPERIENCE_LEVELS shown in the UI, plus the free-text "custom role" path,
+// but any string is a valid InterviewRole.
+export type InterviewRole = string;
+export type ExperienceLevel = string;
 
 export interface InterviewConfig {
   role: InterviewRole;
