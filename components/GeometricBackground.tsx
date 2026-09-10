@@ -185,7 +185,7 @@ export default function GeometricBackground() {
 
       {/* Vignette — pulls the eye to the centre and keeps the shapes from
           competing with the copy at the edges of the frame. */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(5,8,15,0.55)_100%)] opacity-0 dark:opacity-100" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(10,10,10,0.6)_100%)] opacity-0 dark:opacity-100" />
     </div>
   );
 }

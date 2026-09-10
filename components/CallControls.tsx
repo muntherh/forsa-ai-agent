@@ -33,16 +33,16 @@ export default function CallControls({ status, muted, onStart, onToggleMute, onE
 
   return (
     <div className="flex flex-col items-center gap-5">
-      <div className="flex items-center gap-2 rounded-full border border-line bg-white px-4 py-1.5">
+      <div className="flex items-center gap-2 rounded-full border border-line bg-white/70 px-4 py-1.5 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
         <span className={`h-2 w-2 rounded-full ${STATUS_DOT[status]}`} />
-        <span className="text-xs font-medium text-muted">{STATUS_LABEL[status]}</span>
+        <span className="text-xs font-medium text-muted dark:text-dark-muted">{STATUS_LABEL[status]}</span>
       </div>
 
       {!isActive ? (
         <button
           type="button"
           onClick={onStart}
-          className="rounded-xl bg-blue px-8 py-3.5 text-sm font-bold text-white shadow-[0_8px_20px_-6px_rgba(36,112,179,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-dark active:translate-y-0 active:scale-[0.98]"
+          className="rounded-xl bg-blue px-8 py-3.5 text-sm font-bold text-white shadow-[0_8px_20px_-6px_rgba(36,112,179,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-dark active:translate-y-0 active:scale-[0.98] dark:bg-gradient-to-r dark:from-teal dark:to-emerald dark:text-obsidian dark:shadow-[0_0_30px_-6px_rgba(47,224,182,0.6)]"
         >
           Start Interview
         </button>
@@ -55,7 +55,7 @@ export default function CallControls({ status, muted, onStart, onToggleMute, onE
             className={`rounded-xl border px-6 py-3 text-sm font-bold transition-all duration-200 active:scale-[0.98] ${
               muted
                 ? "border-amber/40 bg-amber/10 text-amber-dark hover:bg-amber/15"
-                : "border-line bg-white text-navy hover:-translate-y-0.5 hover:border-blue hover:text-blue"
+                : "border-line bg-white text-navy hover:-translate-y-0.5 hover:border-blue hover:text-blue dark:border-white/12 dark:bg-white/[0.04] dark:text-dark-text dark:hover:border-teal-glow/60 dark:hover:text-teal-glow"
             }`}
           >
             {muted ? "Unmute" : "Mute"}

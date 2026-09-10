@@ -1,19 +1,25 @@
+import type { Scorecard, TranscriptTurn } from "./types";
+
 /**
- * Passes the candidate's full interview setup — role, experience level, and
- * (optionally) parsed CV text — from the landing page to the interview page
- * without a backend or a global state provider: the landing page writes it
- * to sessionStorage right before navigating, the interview page reads it
- * once on mount, then clears it. sessionStorage (not localStorage, not URL
- * query params) is deliberate: this setup is only ever relevant to the
- * single interview about to start, so it shouldn't linger across tabs/visits
- * or be visible/bookmarkable in the URL.
+ * State handoff between the five pages of the interview flow, without a
+ * backend or a global provider:
  *
- * Supersedes the old lib/cv-session.ts (CV-only) now that the landing page's
- * role/experience-level selection also needs to survive the navigation —
- * previously carried via ?role=&level= query params.
+ *   /setup       writes  setup   ─┐
+ *   /interview   reads   setup    │  runs the call, then writes…
+ *   /evaluating  reads   pending ─┘  calls /api/evaluate, then writes…
+ *   /results     reads   scorecard
+ *
+ * sessionStorage (not localStorage, not URL params) throughout: every one of
+ * these payloads belongs to a single interview run, so it shouldn't outlive
+ * the tab, leak across tabs, or be bookmarkable. Each stage clears what it
+ * consumes, so a refresh or a back-navigation can't silently replay stale
+ * data from a previous run — the page guards below turn a missing payload
+ * into a redirect home rather than an infinite spinner.
  */
 
-const STORAGE_KEY = "forsa_interview_setup_v1";
+const SETUP_KEY = "forsa_interview_setup_v1";
+const PENDING_KEY = "forsa_interview_pending_v1";
+const SCORECARD_KEY = "forsa_scorecard_v1";
 
 export interface InterviewSetup {
   role: string;
@@ -22,40 +28,97 @@ export interface InterviewSetup {
   cvFileName?: string;
 }
 
+/** Everything /evaluating needs to run the evaluation on its own. */
+export interface PendingEvaluation extends InterviewSetup {
+  transcript: TranscriptTurn[];
+  callId?: string;
+}
+
+export interface StoredScorecard {
+  scorecard: Scorecard;
+  role: string;
+  experienceLevel: string;
+  cvFileName?: string;
+}
+
 function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
 
-export function saveInterviewSetup(setup: InterviewSetup): void {
+function read<T>(key: string, isValid: (value: unknown) => boolean): T | null {
+  if (!isBrowser()) return null;
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return isValid(parsed) ? (parsed as T) : null;
+  } catch (err) {
+    console.warn(`Failed to read ${key} from sessionStorage:`, err);
+    return null;
+  }
+}
+
+function write(key: string, value: unknown): void {
   if (!isBrowser()) return;
   try {
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(setup));
+    window.sessionStorage.setItem(key, JSON.stringify(value));
   } catch (err) {
-    console.warn("Failed to save interview setup to sessionStorage:", err);
+    console.warn(`Failed to save ${key} to sessionStorage:`, err);
   }
+}
+
+function remove(key: string): void {
+  if (!isBrowser()) return;
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch (err) {
+    console.warn(`Failed to clear ${key} from sessionStorage:`, err);
+  }
+}
+
+export function saveInterviewSetup(setup: InterviewSetup): void {
+  write(SETUP_KEY, setup);
 }
 
 export function loadInterviewSetup(): InterviewSetup | null {
-  if (!isBrowser()) return null;
-  try {
-    const raw = window.sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (typeof parsed?.role === "string" && typeof parsed?.experienceLevel === "string") {
-      return parsed as InterviewSetup;
-    }
-    return null;
-  } catch (err) {
-    console.warn("Failed to read interview setup from sessionStorage:", err);
-    return null;
-  }
+  return read<InterviewSetup>(
+    SETUP_KEY,
+    (v) =>
+      typeof (v as InterviewSetup)?.role === "string" &&
+      typeof (v as InterviewSetup)?.experienceLevel === "string"
+  );
 }
 
 export function clearInterviewSetup(): void {
-  if (!isBrowser()) return;
-  try {
-    window.sessionStorage.removeItem(STORAGE_KEY);
-  } catch (err) {
-    console.warn("Failed to clear interview setup from sessionStorage:", err);
-  }
+  remove(SETUP_KEY);
+}
+
+export function savePendingEvaluation(pending: PendingEvaluation): void {
+  write(PENDING_KEY, pending);
+}
+
+export function loadPendingEvaluation(): PendingEvaluation | null {
+  return read<PendingEvaluation>(
+    PENDING_KEY,
+    (v) => Array.isArray((v as PendingEvaluation)?.transcript) && typeof (v as PendingEvaluation)?.role === "string"
+  );
+}
+
+export function clearPendingEvaluation(): void {
+  remove(PENDING_KEY);
+}
+
+export function saveScorecard(stored: StoredScorecard): void {
+  write(SCORECARD_KEY, stored);
+}
+
+export function loadScorecard(): StoredScorecard | null {
+  return read<StoredScorecard>(
+    SCORECARD_KEY,
+    (v) => !!(v as StoredScorecard)?.scorecard && typeof (v as StoredScorecard)?.role === "string"
+  );
+}
+
+export function clearScorecard(): void {
+  remove(SCORECARD_KEY);
 }

@@ -1,23 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMotionValue, useSpring } from "framer-motion";
+import { motion, useMotionValue, useSpring } from "framer-motion";
+import AppHeader from "@/components/AppHeader";
 import CallControls from "@/components/CallControls";
-import Scorecard from "@/components/Scorecard";
+import GeometricBackground from "@/components/GeometricBackground";
 import TranscriptPanel from "@/components/TranscriptPanel";
 import VoiceWaveform from "@/components/VoiceWaveform";
 import { buildInterviewAssistant, buildInterviewVariableValues } from "@/lib/assistant";
-import { clearInterviewSetup, loadInterviewSetup } from "@/lib/interview-session";
-import { scorecardSchema } from "@/lib/rubric";
+import { clearInterviewSetup, loadInterviewSetup, savePendingEvaluation } from "@/lib/interview-session";
 import { getVapiClient, isVapiConfigured } from "@/lib/vapi-client";
-import type { CallStatus, Scorecard as ScorecardData, TranscriptTurn } from "@/lib/types";
+import type { CallStatus, TranscriptTurn } from "@/lib/types";
 
 // Fallback only for the (unsupported) case of navigating straight to
-// /interview without going through the landing page's setup — there is no
-// sessionStorage payload to read in that case.
+// /interview without going through /setup — there is no sessionStorage
+// payload to read in that case.
 const DEFAULT_ROLE = "Software Engineer";
 const DEFAULT_LEVEL = "Mid-Level";
 
@@ -47,37 +46,39 @@ export default function InterviewPage() {
   const [muted, setMuted] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<TranscriptTurn[]>([]);
-  const [scorecard, setScorecard] = useState<ScorecardData | null>(null);
-  const [scorecardStatus, setScorecardStatus] = useState<"idle" | "waiting" | "ready" | "error" | "too-short">("idle");
+  const [tooShort, setTooShort] = useState(false);
   const [cvFileName, setCvFileName] = useState<string | null>(null);
 
   const hasEndedRef = useRef(false);
-  // Authoritative transcript for the evaluation request: call-end fires a
-  // closure captured when the effect below was registered, so it cannot
-  // read the live `transcript` state without going stale. The ref is
-  // updated in the same tick as every `setTranscript` call, so it never is.
+  // Authoritative transcript for the handoff: call-end fires a closure
+  // captured when the effect below was registered, so it cannot read the
+  // live `transcript` state without going stale. The ref is updated in the
+  // same tick as every `setTranscript` call, so it never is.
   const transcriptRef = useRef<TranscriptTurn[]>([]);
-  // Read once on mount (see the effect below) and reused by both handleStart
-  // (the live call's variableValues) and runEvaluation (the full, uncapped
-  // text sent to Claude) — a ref because neither of those callbacks needs
-  // to re-run when it's set, it just needs the current value when invoked.
+  // The setup is read once on mount and kept in refs so the call-end handler
+  // — which is registered once and never re-registered mid-call — can still
+  // hand the full configuration on to /evaluating.
   const cvTextRef = useRef<string | null>(null);
+  const cvFileNameRef = useRef<string | null>(null);
+  const roleRef = useRef(DEFAULT_ROLE);
+  const levelRef = useRef(DEFAULT_LEVEL);
   // Set once vapi.start() resolves with the call's own id — used only as
-  // the server-side transcript-fallback key (see lib/vapi-server.ts);
-  // the live call itself never needs its own id.
+  // the server-side transcript-fallback key (see lib/vapi-server.ts).
   const callIdRef = useRef<string | null>(null);
 
-  // sessionStorage's interview setup is single-use: read it once here, then
-  // clear it immediately so a later visit to "/" that doesn't go through
-  // setup again can never silently reuse a stale role/CV from a previous
-  // interview.
+  // The setup payload is single-use: read it once, then clear it so a later
+  // visit that doesn't go through /setup can't silently reuse a stale role
+  // or CV from a previous interview.
   useEffect(() => {
     const stored = loadInterviewSetup();
     if (stored) {
       setRole(stored.role);
       setLevel(stored.experienceLevel);
+      roleRef.current = stored.role;
+      levelRef.current = stored.experienceLevel;
       if (stored.cvText) {
         cvTextRef.current = stored.cvText;
+        cvFileNameRef.current = stored.cvFileName ?? "CV";
         setCvFileName(stored.cvFileName ?? "CV");
       }
       clearInterviewSetup();
@@ -87,46 +88,22 @@ export default function InterviewPage() {
   const assistantVolumeRaw = useMotionValue(0);
   const assistantVolume = useSpring(assistantVolumeRaw, { stiffness: 60, damping: 20 });
 
-  const runEvaluation = useCallback(async () => {
+  /** Hands the finished call off to /evaluating, which owns the analysis. */
+  const handOffForEvaluation = useCallback(() => {
     if (transcriptRef.current.length < MIN_TURNS_FOR_EVALUATION) {
-      setScorecardStatus("too-short");
+      setTooShort(true);
       return;
     }
-    setScorecardStatus("waiting");
-    try {
-      const res = await fetch("/api/evaluate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript: transcriptRef.current,
-          role,
-          experienceLevel: level,
-          cvText: cvTextRef.current ?? undefined,
-          callId: callIdRef.current ?? undefined,
-        }),
-      });
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        console.error("[interview] evaluation request failed:", res.status, data);
-        setScorecardStatus("error");
-        return;
-      }
-
-      const parsed = scorecardSchema.safeParse(data);
-      if (!parsed.success) {
-        console.error("[interview] scorecard failed validation:", parsed.error, data);
-        setScorecardStatus("error");
-        return;
-      }
-
-      setScorecard(parsed.data);
-      setScorecardStatus("ready");
-    } catch (err) {
-      console.error("[interview] evaluation request threw:", err);
-      setScorecardStatus("error");
-    }
-  }, [role, level]);
+    savePendingEvaluation({
+      transcript: transcriptRef.current,
+      callId: callIdRef.current ?? undefined,
+      role: roleRef.current,
+      experienceLevel: levelRef.current,
+      cvText: cvTextRef.current ?? undefined,
+      cvFileName: cvFileNameRef.current ?? undefined,
+    });
+    router.push("/evaluating");
+  }, [router]);
 
   useEffect(() => {
     if (!configured) return;
@@ -141,7 +118,7 @@ export default function InterviewPage() {
     const handleCallEnd = () => {
       hasEndedRef.current = true;
       setStatus("ended");
-      void runEvaluation();
+      handOffForEvaluation();
     };
 
     const handleSpeechStart = () => {
@@ -197,26 +174,25 @@ export default function InterviewPage() {
       vapi.off("error", handleError);
       if (!hasEndedRef.current) vapi.stop();
     };
-    // Intentionally run once per mount — Vapi handlers must not be
-    // re-registered mid-call. runEvaluation is stable enough in practice
-    // (only depends on role/level, fixed for the lifetime of this page).
+    // Intentionally registered once per mount — Vapi handlers must not be
+    // re-registered mid-call. handOffForEvaluation only closes over refs and
+    // a stable router, so it never goes stale.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configured]);
 
   const handleStart = useCallback(async () => {
     setErrorMessage(null);
+    setTooShort(false);
     setStatus("connecting");
     transcriptRef.current = [];
     setTranscript([]);
-    setScorecard(null);
-    setScorecardStatus("idle");
     callIdRef.current = null;
     try {
       const vapi = getVapiClient();
       const assistant = buildInterviewAssistant();
       const variableValues = buildInterviewVariableValues({
-        role,
-        experienceLevel: level,
+        role: roleRef.current,
+        experienceLevel: levelRef.current,
         cvText: cvTextRef.current ?? undefined,
       });
       const call = await vapi.start(assistant, { variableValues });
@@ -225,7 +201,7 @@ export default function InterviewPage() {
       setErrorMessage(describeVapiError(err));
       setStatus("error");
     }
-  }, [role, level]);
+  }, []);
 
   const handleToggleMute = useCallback(() => {
     const vapi = getVapiClient();
@@ -241,105 +217,98 @@ export default function InterviewPage() {
 
   if (!configured) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center px-6 text-center dark:bg-obsidian">
-        <h1 className="font-display text-xl font-bold text-navy dark:text-dark-text">Vapi is not configured</h1>
-        <p className="mt-3 text-sm text-muted dark:text-dark-muted">
-          Add{" "}
-          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-teal-glow">
-            NEXT_PUBLIC_VAPI_PUBLIC_KEY
-          </code>{" "}
-          to a{" "}
-          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-teal-glow">
-            .env.local
-          </code>{" "}
-          file (see{" "}
-          <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-teal-glow">
-            .env.example
-          </code>
-          ) and restart the dev server.
-        </p>
-        <Link href="/" className="mt-6 text-sm font-semibold text-blue hover:underline dark:text-teal-glow">
-          ← Back to start
-        </Link>
-      </main>
+      <div className="relative min-h-screen overflow-hidden">
+        <AppHeader />
+        <main className="mx-auto flex min-h-[calc(100vh-69px)] max-w-lg flex-col items-center justify-center px-6 text-center">
+          <h1 className="font-display text-xl font-bold text-navy dark:text-white">Vapi is not configured</h1>
+          <p className="mt-3 text-sm text-muted dark:text-dark-muted">
+            Add{" "}
+            <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-teal-glow">
+              NEXT_PUBLIC_VAPI_PUBLIC_KEY
+            </code>{" "}
+            to a{" "}
+            <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-teal-glow">
+              .env.local
+            </code>{" "}
+            file (see{" "}
+            <code className="rounded bg-white px-1.5 py-0.5 text-blue-dark dark:bg-dark-surface dark:text-teal-glow">
+              .env.example
+            </code>
+            ) and restart the dev server.
+          </p>
+          <Link href="/" className="mt-6 text-sm font-semibold text-blue hover:underline dark:text-teal-glow">
+            ← Back to start
+          </Link>
+        </main>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col px-6 py-12 dark:bg-obsidian sm:py-16">
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => router.push("/")}
-          className="flex items-center gap-2 text-sm font-semibold text-muted transition hover:text-navy dark:text-dark-muted dark:hover:text-dark-text"
-        >
-          <Image src="/logo.png" alt="Forsa" width={24} height={24} className="rounded-full border border-line dark:border-dark-border" />
-          ← Exit
-        </button>
-        <div className="flex items-center gap-2">
-          {cvFileName && (
-            <span className="rounded-full border border-teal/30 bg-teal/10 px-3 py-1 text-xs font-medium text-teal-dark dark:border-teal-glow/25 dark:bg-teal-glow/10 dark:text-teal-glow">
-              CV attached
+    <div className="relative min-h-screen overflow-hidden">
+      <GeometricBackground />
+      <AppHeader
+        right={
+          <div className="flex items-center gap-2">
+            {cvFileName && (
+              <span className="hidden rounded-full border border-teal/30 bg-teal/10 px-3 py-1 text-xs font-medium text-teal-dark sm:inline-block dark:border-teal-glow/25 dark:bg-teal-glow/10 dark:text-teal-glow">
+                CV attached
+              </span>
+            )}
+            <span className="rounded-full border border-line bg-white/70 px-3 py-1 text-xs font-medium text-muted backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:text-dark-muted">
+              {role} · {level}
             </span>
-          )}
-          <span className="rounded-full border border-line bg-white px-3 py-1 text-xs font-medium text-muted dark:border-dark-border dark:bg-dark-surface dark:text-dark-muted">
-            {role} · {level}
+          </div>
+        }
+      />
+
+      <main className="relative mx-auto flex max-w-2xl flex-col px-6 pb-24 pt-10 sm:pt-14">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-dark dark:text-teal-glow">
+            Step 2 of 2 · Live session
           </span>
         </div>
-      </div>
 
-      <div className="mt-8">
-        <VoiceWaveform status={status} volume={status === "speaking" ? assistantVolume : undefined} />
-      </div>
-
-      <div className="mt-8">
-        <CallControls status={status} muted={muted} onStart={handleStart} onToggleMute={handleToggleMute} onEnd={handleEnd} />
-      </div>
-
-      {errorMessage && (
-        <p className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
-          {errorMessage}
-        </p>
-      )}
-
-      {(status === "connecting" || status === "speaking" || status === "listening" || status === "ended") && (
-        <div className="mt-8">
-          <TranscriptPanel turns={transcript} />
+        <div className="mt-6">
+          <VoiceWaveform status={status} volume={status === "speaking" ? assistantVolume : undefined} />
         </div>
-      )}
 
-      {status === "ended" && (
         <div className="mt-8">
-          {scorecardStatus === "ready" && scorecard && (
-            <Scorecard data={scorecard} role={role} experienceLevel={level} />
-          )}
-
-          {scorecardStatus === "waiting" && (
-            <div className="flex flex-col items-center gap-3 rounded-card border border-line bg-white p-8 text-center shadow-sm dark:border-dark-border dark:bg-dark-surface">
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-blue dark:border-dark-border dark:border-t-teal-glow" />
-              <p className="text-sm text-muted dark:text-dark-muted">Generating your interview scorecard…</p>
-            </div>
-          )}
-
-          {scorecardStatus === "error" && (
-            <div className="rounded-card border border-amber/30 bg-amber/10 p-6 text-center dark:border-amber/20 dark:bg-amber/10">
-              <p className="text-sm text-amber-dark">
-                We couldn&apos;t generate a scorecard for this interview. Your transcript above is still available —
-                please try another practice interview.
-              </p>
-            </div>
-          )}
-
-          {scorecardStatus === "too-short" && (
-            <div className="rounded-card border border-line bg-white p-6 text-center shadow-sm dark:border-dark-border dark:bg-dark-surface">
-              <p className="text-sm text-muted dark:text-dark-muted">
-                That call ended too early to generate a meaningful scorecard. Try a full practice interview of at
-                least a few questions.
-              </p>
-            </div>
-          )}
+          <CallControls
+            status={status}
+            muted={muted}
+            onStart={handleStart}
+            onToggleMute={handleToggleMute}
+            onEnd={handleEnd}
+          />
         </div>
-      )}
-    </main>
+
+        {errorMessage && (
+          <p className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+            {errorMessage}
+          </p>
+        )}
+
+        {tooShort && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 100, damping: 20 }}
+            className="mt-6 rounded-[22px] border border-line bg-white/70 p-6 text-center backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]"
+          >
+            <p className="text-sm text-muted dark:text-dark-muted">
+              That call ended too early to generate a meaningful scorecard. Try a full practice
+              interview of at least a few questions.
+            </p>
+          </motion.div>
+        )}
+
+        {(status === "connecting" || status === "speaking" || status === "listening" || status === "ended") && (
+          <div className="mt-8">
+            <TranscriptPanel turns={transcript} />
+          </div>
+        )}
+      </main>
+    </div>
   );
 }

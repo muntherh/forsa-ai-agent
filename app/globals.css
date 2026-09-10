@@ -12,8 +12,8 @@ html {
    app/layout.tsx (see lib/theme.ts). Dark is the default; .light is the
    explicit opt-out. */
 body {
-  background-color: #05080f;
-  color: #f4f8fb;
+  background-color: #0a0a0a;
+  color: #f4f6f8;
 }
 
 html:not(.dark) body {

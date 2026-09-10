@@ -194,7 +194,7 @@ export default function VoiceWaveform({ status, volume }: { status: CallStatus; 
   const reduced = useSafeReducedMotion();
 
   return (
-    <div className="flex flex-col items-center justify-center rounded-card border border-line bg-white py-8">
+    <div className="flex flex-col items-center justify-center rounded-[22px] border border-line bg-white/70 py-8 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.035]">
       <div className="flex items-center justify-center" style={{ height: SIZE, width: "100%" }}>
         <AnimatePresence mode="wait">
           <motion.div
@@ -213,7 +213,7 @@ export default function VoiceWaveform({ status, volume }: { status: CallStatus; 
         </AnimatePresence>
       </div>
 
-      <p className="mt-4 text-xs font-medium uppercase tracking-[0.3em] text-muted" aria-live="polite">
+      <p className="mt-4 text-xs font-medium uppercase tracking-[0.3em] text-muted dark:text-dark-muted" aria-live="polite">
         {CAPTION[status]}
       </p>
     </div>

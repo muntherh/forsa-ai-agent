@@ -31,12 +31,12 @@ const config: Config = {
         // brand navy, so the dark surfaces read as "Forsa at night" rather
         // than neutral grey. Emerald is the brighter end of the teal ramp,
         // used only for glow/active states.
-        obsidian: "#05080F",
-        "dark-surface": "#0A1018",
-        "dark-surface-raised": "#111A25",
-        "dark-border": "#1E2A38",
-        "dark-muted": "#8697A8",
-        "dark-text": "#F4F8FB",
+        obsidian: "#0A0A0A",
+        "dark-surface": "#101215",
+        "dark-surface-raised": "#16191E",
+        "dark-border": "#24282F",
+        "dark-muted": "#8B939E",
+        "dark-text": "#F4F6F8",
         emerald: { DEFAULT: "#12C99B", glow: "#34E7BE" },
       },
       fontFamily: {

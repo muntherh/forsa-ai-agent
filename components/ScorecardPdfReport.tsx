@@ -228,7 +228,9 @@ export default function ScorecardPdfReport({ data, role, experienceLevel }: Scor
         type="button"
         onClick={handleDownload}
         disabled={status === "generating"}
-        className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-blue py-3.5 text-sm font-bold text-white shadow-[0_8px_20px_-6px_rgba(36,112,179,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-dark disabled:cursor-not-allowed disabled:opacity-90 disabled:hover:translate-y-0"
+        // Only the BUTTON is theme-aware. The hidden capture layout below
+        // must stay light: html2canvas rasterizes it onto white PDF pages.
+        className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-blue py-3.5 text-sm font-bold text-white shadow-[0_8px_20px_-6px_rgba(36,112,179,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-dark disabled:cursor-not-allowed disabled:opacity-90 disabled:hover:translate-y-0 dark:bg-gradient-to-r dark:from-teal dark:to-emerald dark:text-obsidian dark:shadow-[0_0_30px_-6px_rgba(47,224,182,0.6)]"
       >
         {status === "generating" ? <SpinnerIcon /> : status === "success" ? <CheckIcon /> : <DownloadIcon />}
         {label}
