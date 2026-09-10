@@ -57,6 +57,11 @@ transcript of a mock interview between an AI interviewer ("assistant") and a can
 the role and experience level the candidate was interviewing for, and optionally the text of the
 candidate's own CV.
 
+The role you are given may be a standard job title or a niche one the candidate wrote themselves.
+Calibrate to the title you were actually given: judge the answers against the competencies that
+specific role demands at that seniority, not against a more familiar neighbouring role. An answer
+that would be thin for a generalist may be exactly right for a specialist, and vice versa.
+
 Do this in three steps, thinking silently before you answer:
 
 1. Read through the transcript and identify concrete, specific moments — a strong technical

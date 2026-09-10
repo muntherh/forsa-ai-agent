@@ -1,6 +1,7 @@
 "use client";
 
 import ScorecardPdfReport from "@/components/ScorecardPdfReport";
+import UpskillingRecommendations from "@/components/UpskillingRecommendations";
 import type { ExperienceLevel, InterviewRole, Recommendation, Scorecard as ScorecardData } from "@/lib/types";
 
 const RECOMMENDATION_STYLES: Record<Recommendation, string> = {
@@ -157,6 +158,10 @@ export default function Scorecard({ data, role, experienceLevel }: ScorecardProp
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="mt-8 border-t border-line pt-8 dark:border-white/10">
+        <UpskillingRecommendations data={data} />
       </div>
 
       <div className="mt-8">
