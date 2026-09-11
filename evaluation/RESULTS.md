@@ -9,7 +9,7 @@
 | **Track** | LLM/API Integration (Code-First) |
 | **Repository** | https://github.com/muntherh/forsa-ai-agent |
 | **Harness** | `evaluation/` — 371 lines, 0 additional dependencies |
-| **Reproduce** | `npm run eval` (deterministic set) · `npm run eval -- --live` (full set) |
+| **Reproduce** | `npm run eval` → 15/16 (no credentials) · `npm run eval -- --live` → 16/16 |
 
 ---
 
@@ -66,11 +66,87 @@ Each case declares a `mode`:
 Cases requiring credentials are **skipped by default and reported in a separate
 tally**. The runner is structurally incapable of printing a skipped case as
 passed. A failure exits non-zero, allowing the suite to gate CI. This is what
-permits the results in §3 to be read as measurements rather than claims.
+permits the results in §4 to be read as measurements rather than claims.
 
 ---
 
-## 2. Benchmark Dataset Breakdown
+## 2. System Architecture Under Test
+
+The measurements in §4 are only meaningful against a clear statement of what was
+built. Two architectural decisions define the system.
+
+### 2.1 A deliberate two-model split
+
+Forsa AI runs **two different models for two different jobs**, rather than
+forcing one model to do both badly.
+
+| Stage | Component | Configuration |
+|---|---|---|
+| **Live conversation** | GPT-4o, served through Vapi | `provider: "openai"`, `model: "gpt-4o"`, `temperature: 0.6` |
+| **Speech-to-text** | Deepgram Nova-2 | `language: "en"` |
+| **Text-to-speech** | OpenAI `alloy` | — |
+| **Transport** | Vapi WebRTC | `maxDurationSeconds: 900` |
+| **Post-call evaluation** | Anthropic Claude Sonnet (`claude-sonnet-5`) | Structured Outputs against a Zod schema |
+
+The rationale is latency versus rigour. A live interview turn must return fast
+enough to feel like a conversation; the evaluation that follows has no such
+constraint but must emit a **schema-valid scorecard** that the UI and the PDF
+exporter can both consume without defensive parsing. Those are different
+problems, and they are solved by different models.
+
+The assistant — model, voice, transcriber, system prompt, and its self-invoked
+`endCall` tool — is constructed **entirely in code** (`lib/assistant.ts`). No
+assistant is pre-created in a Vapi dashboard, which means the platform runs on a
+public key alone and there is no externally-held configuration that can drift out
+of sync with the repository. Case **E1** in §3.5 certifies exactly this property.
+
+Giving the model an `endCall` tool is a small decision with real consequence: the
+agent closes the interview itself once its question set is complete, rather than
+the application inferring "done" from transcript heuristics that would misfire on
+a long pause or a candidate's closing remark.
+
+### 2.2 Microphone control and turn-taking, stated precisely
+
+The candidate has **direct manual control** of the microphone during the call via
+`vapi.setMuted()`, surfaced as a mute toggle in the call controls.
+
+Turn-taking and barge-in are handled by **Vapi's default real-time pipeline**.
+This project configures no custom speaking plans, silence thresholds, or
+background-denoising parameters. That is stated plainly here because the
+distinction is verifiable in thirty seconds by reading `lib/assistant.ts`, and an
+inflated claim about it would be worth less than the honest one.
+
+### 2.3 CV → transcript cross-analysis
+
+The system does not score spoken answers in isolation. The candidate's CV is
+injected at **two separate stages**, under two different constraints.
+
+| Stage | CV form | Purpose |
+|---|---|---|
+| **Live interview** | Sanitised and capped to **1,000 characters** — quotes, newlines, tabs and repeated whitespace stripped | The interviewer opens on a **real project from the candidate's own history**, and grounds at least one technical question in it, instead of a generic opener |
+| **Post-call evaluation** | **Full text, uncapped**, sent alongside the complete transcript | Claude weighs what the candidate **said** against what they **claimed** |
+
+The cap exists for a concrete reason. Vapi's call-start request carries the CV in
+its `variableValues` payload; raw PDF extraction routinely yields several thousand
+characters of multi-line text with quote characters and column artifacts, which
+can malform that payload and reject the call at the exact moment the candidate
+presses *Start*. The evaluation call has no such constraint, so it receives
+everything — the asymmetry is intentional, and case **B3** in §3.2 certifies it.
+
+The payoff is in the action plan. The evaluation prompt **requires** at least one
+task to be grounded in a specific CV item — a listed technology the interview
+revealed a shallow understanding of, or a genuine strength worth building on.
+This is what separates an evaluator from a transcript summariser: the output is
+anchored to the candidate's own claimed history, not to generic advice.
+
+*Scope note:* the prompt instructs the evaluator to weigh transcript evidence
+against the CV and to ground remediation in it. It does **not** run a separate
+contradiction-detection pass, and the *quality* of that cross-analysis is not
+benchmarked here — see §6.1.
+
+---
+
+## 3. Benchmark Dataset Breakdown
 
 The dataset comprises **16 cases across 5 dimensions**, weighted deliberately
 toward the failure modes that matter for an interview product: unrecognised job
@@ -84,7 +160,7 @@ titles, degenerate CV input, and malformed model output.
 | **D — Upskilling recommendation logic** | 3 | Recommendations trace to a real deficit, bounded and non-duplicated |
 | **E — Agent & API contract** | 2 | Assistant is self-contained; the API rejects bad input before spending an upstream call |
 
-### 2.1 Dimension A — Custom role parsing and competency extraction
+### 3.1 Dimension A — Custom role parsing and competency extraction
 
 Forsa AI accepts arbitrary free-text job titles. The architectural risk is
 **silent normalisation**: a model that quietly interviews a "Quantitative
@@ -102,7 +178,7 @@ The title in **A2** is chosen adversarially: it contains a parenthetical
 sub-specialisation, spans two recognised disciplines, and appears nowhere in the
 43-role catalogue.
 
-### 2.2 Dimension B — Edge-case CV inputs
+### 3.2 Dimension B — Edge-case CV inputs
 
 | # | Input profile | Assertion |
 |---|---|---|
@@ -115,7 +191,7 @@ sub-specialisation, spans two recognised disciplines, and appears nowhere in the
 text with quote characters and column artifacts that can malform that payload and
 reject the call at the moment the candidate presses *Start*.
 
-### 2.3 Dimension C — Schema conformance and JSON structure validation
+### 3.3 Dimension C — Schema conformance and JSON structure validation
 
 The evaluation route uses **Anthropic Structured Outputs** —
 `client.messages.parse()` with `output_config.format` derived from a Zod schema
@@ -135,7 +211,7 @@ rather than cosmetic — `zodOutputFormat()` calls `z.toJSONSchema()` internally
 which exists only on v4-style schema instances; a schema built from the classic
 v3 import fails at runtime when passed to it.
 
-### 2.4 Dimension D — Threshold-based upskilling recommendation logic
+### 3.4 Dimension D — Threshold-based upskilling recommendation logic
 
 The recommendation engine converts rubric scores into a learning roadmap. A
 category scoring **below 75** is treated as a genuine deficit; recommendations
@@ -153,7 +229,7 @@ finds a fault is an engine whose findings carry no information. Each rendered
 card displays the numeric score that triggered it (e.g. *"Communication ·
 52/100"*), making every suggestion auditable by the candidate.
 
-### 2.5 Dimension E — Agent and API contract
+### 3.5 Dimension E — Agent and API contract
 
 | # | Case | Assertion |
 |---|---|---|
@@ -162,39 +238,64 @@ card displays the numeric score that triggered it (e.g. *"Communication ·
 
 ---
 
-## 3. Quantitative Results & Performance Metrics
+## 4. Quantitative Results & Performance Metrics
 
-### 3.1 Benchmark suite
+### 4.1 Benchmark suite
+
+The suite runs in two modes, and the distinction is reported rather than hidden.
+
+**Mode 1 — `npm run eval` · 15 deterministic cases, no credentials, no network**
 
 ```
-Forsa AI — Pipeline Evaluation Suite
-16 benchmark cases
-
-Executed : 16/16
-Passed   : 16
-Failed   : 0
-Wall time: 143.6ms
+Summary
+  Executed : 15/16
+  Passed   : 15
+  Failed   : 0
+  Skipped  : 1 (require --live + a running server)
+  Wall time: 4.9ms
 ```
+
+**Mode 2 — `npm run eval -- --live` · all 16 cases against a running server**
+
+```
+  ✔ E2 /api/evaluate rejects a malformed request body (400, no upstream call)
+      400 returned before any upstream request (99.8ms)
+
+Summary
+  Executed : 16/16
+  Passed   : 16
+  Failed   : 0
+  Wall time: 103.8ms
+
+All executed cases passed.
+```
+
+A judge running the default command will see **15/16 executed with 1 skipped** —
+that is the harness working as designed, not a gap. The sixteenth case (E2)
+requires a live HTTP server, so it is withheld by default and tallied separately.
+The runner is structurally incapable of printing a skipped case as passed, which
+is precisely what makes the 16/16 in Mode 2 meaningful.
 
 | Metric | Result |
 |---|---|
-| Cases executed | **16 / 16** |
-| **Pass rate** | **100% (16/16)** |
+| **Pass rate — full suite** | **100% (16 / 16)** |
+| **Pass rate — credential-free subset** | **100% (15 / 15 executed, 1 correctly skipped)** |
+| Failures across both modes | **0** |
 | Malformed payloads accepted by the schema | **0 / 4** |
 | Custom-title fidelity | **100%** — preserved verbatim into both prompts |
 | Role taxonomy | **5 categories / 43 roles**, all ids unique, all labelled |
 | CV payload capping | 5,000+ chars → **1,000 chars**, control characters stripped |
-| Full-suite wall time (16 cases) | **143.6 ms** |
-| Deterministic subset (15 cases) | **5.3 ms** |
+| Deterministic subset wall time (15 cases) | **4.9 ms** |
+| Full-suite wall time (16 cases) | **103.8 ms** |
 | Dependencies added by the harness | **0** |
 
 Execution overhead is low enough that the suite is a **pre-commit-viable gate**,
-not a nightly job. The 15 deterministic cases complete in **5.3 ms** combined; the
-full-suite figure is dominated almost entirely by the single HTTP round-trip in
-E2 (**138.2 ms** of the 143.6 ms total), which is network time, not evaluation
+not a nightly job. The 15 deterministic cases complete in **4.9 ms** combined.
+The full-suite figure is dominated almost entirely by the single HTTP round-trip
+in E2 — **99.8 ms of the 103.8 ms total** — which is network time, not evaluation
 overhead.
 
-### 3.2 Pipeline integrity — browser-measured
+### 4.2 Pipeline integrity — browser-measured
 
 Driven end-to-end in headless Chromium across
 `/` → `/setup` → `/interview` → `/evaluating` → `/results`:
@@ -213,7 +314,7 @@ The analysis-screen metric is deliberate. The loading sequence is gated on the
 **actual** request lifecycle rather than a decorative timer, so the interface
 cannot report work as finished while it is still pending.
 
-### 3.3 PDF action plan — artifact-level verification
+### 4.3 PDF action plan — artifact-level verification
 
 The exported report was opened and inspected **programmatically with PyMuPDF**,
 not merely downloaded:
@@ -238,7 +339,7 @@ whose baseline placement differs slightly. Hit areas are now padded to absorb
 that drift, and each was re-verified against the rendered glyph bands extracted
 from the generated file.
 
-### 3.4 Build, static analysis and regression posture
+### 4.4 Build, static analysis and regression posture
 
 | Metric | Result |
 |---|---|
@@ -249,7 +350,7 @@ from the generated file.
 | Audio assets in initial bundle | **0 kB** — ~31 kB lazy-loaded on first play |
 | Runtime environment diagnostics | `/api/health` reports live commit SHA and per-variable configuration state (booleans only; no secret values, prefixes or lengths) |
 
-### 3.5 Verified stack
+### 4.5 Verified stack
 
 | Layer | Component | Version |
 |---|---|---|
@@ -263,7 +364,7 @@ from the generated file.
 
 ---
 
-## 4. Defects Surfaced by Evaluation
+## 5. Defects Surfaced by Evaluation
 
 Evaluation earned its cost by surfacing four defects that a passing build and a
 clean type-check did not:
@@ -287,34 +388,40 @@ clean type-check did not:
 
 ---
 
-## 5. Declared Boundaries and Technical Rigor
+## 6. Declared Boundaries and Technical Rigor
 
 An evaluation section is only as credible as the boundary it declares. The
 following are **explicitly outside** the scope of the measurements above:
 
-**5.1 Scoring quality is not benchmarked against human raters.** The suite
+**6.1 Scoring quality is not benchmarked against human raters.** The suite
 certifies that model output conforms to the rubric schema and renders
 deterministically. It does **not** measure agreement between Claude's category
 scores and expert human interviewer judgement, which would require an
 inter-rater reliability study over labelled transcripts.
 
-**5.2 End-to-end voice latency is a property of upstream providers.** The WebRTC
+**6.2 End-to-end voice latency is a property of upstream providers.** The WebRTC
 loop (Vapi orchestration, Deepgram transcription, model inference, speech
 synthesis) is measured across networks and infrastructure outside this
 repository's control. Voice behaviour was validated interactively; no
 instrumented latency figure is claimed as a controlled measurement.
 
-**5.3 Upstream evaluation latency is not reported.** Every automated run used a
+**6.3 Upstream evaluation latency is not reported.** Every automated run used a
 deterministic or validation-path response. No timing figure is asserted for the
 live Claude call, as none was measured under controlled conditions.
 
-**5.4 What the boundary buys.** Confining automated claims to deterministic
-logic, schema conformance and system contracts means every figure in §3 is
+**6.4 Turn-taking behaviour is not tuned or benchmarked.** Barge-in, endpointing
+and silence handling are Vapi's platform defaults; this project configures no
+custom speaking plans or denoising parameters (see §2.2). Microphone control is
+manual, by candidate action. No claim is made about interruption quality, and no
+measurement of it is reported.
+
+**6.5 What the boundary buys.** Confining automated claims to deterministic
+logic, schema conformance and system contracts means every figure in §4 is
 reproducible by a judge on a clean checkout, with no credential, in under a
 second. Metrics that depend on third-party infrastructure are named as such
 rather than estimated.
 
-### 5.5 Declared next measurement
+### 6.6 Declared next measurement
 
 The natural extension is a **labelled transcript corpus** — strong, average and
 weak responses per rubric dimension — asserting **monotonicity**: a strictly
@@ -324,7 +431,7 @@ addition to the harness post-submission.
 
 ---
 
-## 6. Reproduction
+## 7. Reproduction
 
 ```bash
 git clone https://github.com/muntherh/forsa-ai-agent
