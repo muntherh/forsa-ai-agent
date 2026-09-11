@@ -8,8 +8,8 @@
 | **Builder** | Al-Munther Hilal Al-Harrasi (Individual Builder) |
 | **Track** | LLM/API Integration (Code-First) |
 | **Repository** | https://github.com/muntherh/forsa-ai-agent |
-| **Harness** | `evaluation/` — 476 lines, 0 additional dependencies |
-| **Reproduce** | `npm run eval` → 20/21 (no credentials) · `npm run eval -- --live` → 21/21 |
+| **Harness** | `evaluation/` — 542 lines, 0 additional dependencies |
+| **Reproduce** | `npm run eval` → 24/25 (no credentials) · `npm run eval -- --live` → 25/25 |
 
 ---
 
@@ -51,7 +51,7 @@ most common way a green test suite comes to certify nothing.
 The harness runs the TypeScript sources directly through **Node's native type
 stripping** (`node --experimental-strip-types`, Node v22.22.2). There is no
 transpilation step, no bundler, and no test framework added to the dependency
-tree. The entire suite is 476 lines and adds **zero** packages to
+tree. The entire suite is 542 lines and adds **zero** packages to
 `package.json` — a deliberate choice, since an evaluation apparatus that itself
 introduces supply-chain surface is a poor trade for a security-conscious
 submission.
@@ -179,7 +179,7 @@ benchmarked here — see §6.1.
 
 ## 3. Benchmark Dataset Breakdown
 
-The dataset comprises **21 cases across 6 dimensions**, weighted deliberately
+The dataset comprises **25 cases across 7 dimensions**, weighted deliberately
 toward the failure modes that matter for an interview product: unrecognised job
 titles, degenerate CV input, and malformed model output.
 
@@ -191,6 +191,7 @@ titles, degenerate CV input, and malformed model output.
 | **D — Upskilling recommendation logic** | 3 | Recommendations trace to a real deficit, bounded and non-duplicated |
 | **E — Agent & API contract** | 2 | Assistant is self-contained; the API rejects bad input before spending an upstream call |
 | **F — Conversational resilience** | 5 | Pauses and mutes are handled as thinking time, never as non-answers |
+| **G — Persona & safety contract** | 4 | The interviewer's non-discrimination and framing rules cannot silently erode |
 
 ### 3.1 Dimension A — Custom role parsing and competency extraction
 
@@ -288,6 +289,31 @@ interrupts itself because it cannot tell its own speech from dead air. F4 proves
 the cap holds under sustained pressure: a candidate who mutes for ten minutes is
 reassured twice and then left in peace, rather than nagged 50 times.
 
+### 3.7 Dimension G — Persona and safety contract
+
+The interviewer's system prompt is the product's most safety-critical artifact and
+its least protected one: prose has no type system, and a well-meaning edit can
+delete a non-discrimination clause without breaking a build or failing a test.
+Dimension G reads the prompt **out of the real assistant config** and asserts its
+guarantees are still there.
+
+| # | Guarantee | Assertion |
+|---|---|---|
+| **G1** | Non-discrimination | All six protected traits named, **accent explicitly included**, and the rule declared as overriding every other instruction |
+| **G2** | Prompt confidentiality | The agent is instructed to refuse extraction of its own instructions, with no stated exception |
+| **G3** | Honest framing | Practice framing present; claiming a real hiring decision explicitly forbidden |
+| **G4** | Seniority coverage | **Every** entry in `EXPERIENCE_LEVELS` has explicit calibration in the prompt |
+
+**G4 is a drift guard across two files.** Adding a tier to `lib/roles.ts` — a
+"Staff / Distinguished" level, say — without calibrating the interviewer for it
+would silently interview that entire cohort at the wrong bar, with nothing to
+signal the mistake. The case was verified to fail against exactly that simulated
+change, and G1 verified to fail against a softened non-discrimination clause;
+neither is a test that passes vacuously.
+
+Dimension G is also what makes the §2 prompt architecture auditable rather than
+merely asserted. Anyone can read the prompt; these cases prove it has not moved.
+
 ---
 
 ## 4. Quantitative Results & Performance Metrics
@@ -296,56 +322,56 @@ reassured twice and then left in peace, rather than nagged 50 times.
 
 The suite runs in two modes, and the distinction is reported rather than hidden.
 
-**Mode 1 — `npm run eval` · 20 deterministic cases, no credentials, no network**
+**Mode 1 — `npm run eval` · 24 deterministic cases, no credentials, no network**
 
 ```
 Summary
-  Executed : 20/21
-  Passed   : 20
+  Executed : 24/25
+  Passed   : 24
   Failed   : 0
   Skipped  : 1 (require --live + a running server)
-  Wall time: 4.2ms
+  Wall time: 4.7ms
 ```
 
-**Mode 2 — `npm run eval -- --live` · all 21 cases against a running server**
+**Mode 2 — `npm run eval -- --live` · all 25 cases against a running server**
 
 ```
   ✔ E2 /api/evaluate rejects a malformed request body (400, no upstream call)
       400 returned before any upstream request (99.8ms)
 
 Summary
-  Executed : 21/21
-  Passed   : 21
+  Executed : 25/25
+  Passed   : 25
   Failed   : 0
-  Wall time: 105.6ms
+  Wall time: 101.8ms
 
 All executed cases passed.
 ```
 
-A judge running the default command will see **20/21 executed with 1 skipped** —
-that is the harness working as designed, not a gap. The twenty-first case (E2)
+A judge running the default command will see **24/25 executed with 1 skipped** —
+that is the harness working as designed, not a gap. The twenty-fifth case (E2)
 requires a live HTTP server, so it is withheld by default and tallied separately.
 The runner is structurally incapable of printing a skipped case as passed, which
-is precisely what makes the 21/21 in Mode 2 meaningful.
+is precisely what makes the 25/25 in Mode 2 meaningful.
 
 | Metric | Result |
 |---|---|
-| **Pass rate — full suite** | **100% (21 / 21)** |
-| **Pass rate — credential-free subset** | **100% (20 / 20 executed, 1 correctly skipped)** |
+| **Pass rate — full suite** | **100% (25 / 25)** |
+| **Pass rate — credential-free subset** | **100% (24 / 24 executed, 1 correctly skipped)** |
 | Failures across both modes | **0** |
 | Malformed payloads accepted by the schema | **0 / 4** |
 | Custom-title fidelity | **100%** — preserved verbatim into both prompts |
 | Role taxonomy | **5 categories / 43 roles**, all ids unique, all labelled |
 | CV payload capping | 5,000+ chars → **1,000 chars**, control characters stripped |
-| Deterministic subset wall time (20 cases) | **4.2 ms** |
-| Full-suite wall time (21 cases) | **105.6 ms** |
+| Deterministic subset wall time (24 cases) | **4.7 ms** |
+| Full-suite wall time (25 cases) | **101.8 ms** |
 | Dependencies added by the harness | **0** |
 
 Execution overhead is low enough that the suite is a **pre-commit-viable gate**,
-not a nightly job. The 20 deterministic cases complete in **4.2 ms** combined —
+not a nightly job. The 24 deterministic cases complete in **4.7 ms** combined —
 including ten minutes of simulated interview silence in F4.
 The full-suite figure is dominated almost entirely by the single HTTP round-trip
-in E2 — **99.8 ms of the 105.6 ms total** — which is network time, not evaluation
+in E2 — the overwhelming majority of the 101.8 ms total — which is network time, not evaluation
 overhead.
 
 ### 4.2 Pipeline integrity — browser-measured
@@ -493,8 +519,8 @@ addition to the harness post-submission.
 git clone https://github.com/muntherh/forsa-ai-agent
 cd forsa-ai-agent && npm install
 
-npm run eval              # 20 deterministic cases — no credentials required
-npm run eval -- --live    # all 21 cases — requires a running server
+npm run eval              # 24 deterministic cases — no credentials required
+npm run eval -- --live    # all 25 cases — requires a running server
 
 npx tsc --noEmit          # type integrity
 npm run lint              # static analysis
