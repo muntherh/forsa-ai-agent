@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { CATEGORY_LABELS, recommendCourses } from "@/lib/upskilling";
+import { CATEGORY_LABELS, recommendCourses, type LearnerContext } from "@/lib/upskilling";
 import type { Scorecard as ScorecardData } from "@/lib/types";
 
 /**
@@ -10,8 +10,16 @@ import type { Scorecard as ScorecardData } from "@/lib/types";
  * triggered it, so the candidate can see exactly why it was suggested rather
  * than being handed a generic course list.
  */
-export default function UpskillingRecommendations({ data }: { data: ScorecardData }) {
-  const recommendations = recommendCourses(data);
+export default function UpskillingRecommendations({
+  data,
+  learner,
+}: {
+  data: ScorecardData;
+  /** Role and seniority, so a school-age learner is routed to foundations
+   *  rather than to a Princeton algorithms course. */
+  learner?: LearnerContext;
+}) {
+  const recommendations = recommendCourses(data, learner);
   if (recommendations.length === 0) return null;
 
   const isReinforcement = recommendations[0].isReinforcement;
@@ -24,7 +32,7 @@ export default function UpskillingRecommendations({ data }: { data: ScorecardDat
       <p className="mt-1.5 text-sm text-muted dark:text-dark-muted">
         {isReinforcement
           ? "No real weak spots in this interview — these are the sharpening moves for your lowest band."
-          : "Free courses matched to the specific areas this interview scored lowest on."}
+          : "Free-access resources matched to the areas this interview scored lowest on, including hubs here in Muscat."}
       </p>
 
       <div className="mt-5 space-y-3">
@@ -41,10 +49,22 @@ export default function UpskillingRecommendations({ data }: { data: ScorecardDat
                 {CATEGORY_LABELS[category]} · {Math.round(score)}/100
               </span>
               <span className="text-[11px] font-medium text-muted dark:text-dark-muted">{course.provider}</span>
+              {course.tier === "local" && (
+                <span className="rounded-full border border-teal/30 bg-teal/10 px-2.5 py-0.5 text-[11px] font-semibold text-teal-dark dark:border-teal-glow/25 dark:bg-teal-glow/10 dark:text-teal-glow">
+                  In Muscat
+                </span>
+              )}
             </div>
 
             <p className="mt-2.5 text-sm font-bold text-navy dark:text-white">{course.title}</p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-muted dark:text-dark-muted">{course.outcome}</p>
+
+            {/* Access terms and, for a physical hub, where it actually is —
+                a local recommendation without an address is not actionable. */}
+            <p className="mt-2 text-[11px] text-muted dark:text-dark-muted">
+              {course.access}
+              {course.location ? ` · ${course.location}` : ""}
+            </p>
 
             <a
               href={course.url}
@@ -52,7 +72,7 @@ export default function UpskillingRecommendations({ data }: { data: ScorecardDat
               rel="noopener noreferrer"
               className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-blue/30 bg-blue/[0.06] px-3 py-1.5 text-xs font-bold text-blue-dark transition-colors hover:bg-blue/10 dark:border-teal-glow/30 dark:bg-teal-glow/[0.08] dark:text-teal-glow dark:hover:bg-teal-glow/15"
             >
-              Start this course
+              {course.format === "hub" ? "Visit" : "Start this course"}
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
                 <path
                   d="M7 17L17 7M17 7H8M17 7v9"

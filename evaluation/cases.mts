@@ -16,7 +16,13 @@
 import { buildInterviewVariableValues, buildInterviewAssistant } from "../lib/assistant.ts";
 import { buildEvaluationUserContent, scorecardSchema } from "../lib/rubric.ts";
 import { ROLE_CATEGORIES, EXPERIENCE_LEVELS } from "../lib/roles.ts";
-import { recommendCourses, COURSE_CATALOGUE } from "../lib/upskilling.ts";
+import {
+  recommendCourses,
+  inferLearnerStage,
+  COURSE_CATALOGUE,
+  type Course,
+  type SkillCategory,
+} from "../lib/upskilling.ts";
 import {
   createInterviewFlowState,
   noteAssistantSpeechEnd,
@@ -455,6 +461,99 @@ export const CASES: EvalCase[] = [
       return uncalibrated.length === 0
         ? pass(`all ${EXPERIENCE_LEVELS.length} levels calibrated in the prompt`)
         : fail(`no calibration for: ${uncalibrated.join(", ")}`);
+    },
+  },
+
+  // ─── H. Catalogue integrity & learner-stage routing ─────────────────────
+  {
+    id: "H1",
+    dimension: "Catalogue integrity",
+    name: "Every resource carries an auditable, non-rotted URL",
+    mode: "offline",
+    run: () => {
+      const ids = COURSE_CATALOGUE.map((c) => c.id);
+      const dupes = ids.filter((id, i) => ids.indexOf(id) !== i);
+      const insecure = COURSE_CATALOGUE.filter(
+        (c) => !c.url.startsWith("https://") || !c.fallbackUrl.startsWith("https://")
+      );
+      const unaudited = COURSE_CATALOGUE.filter((c) => !c.verifiedOn || !c.verification);
+      // Regression guard: this exact path 404'd in production on 2026-09-11.
+      const knownDead = COURSE_CATALOGUE.filter((c) =>
+        c.url.includes("/professional-certificates/google-ai-essentials")
+      );
+      return dupes.length === 0 && insecure.length === 0 && unaudited.length === 0 && knownDead.length === 0
+        ? pass(`${COURSE_CATALOGUE.length} resources: ids unique, all https, all carry verification metadata, known-dead path absent`)
+        : fail(`dupes=${dupes.length} insecure=${insecure.length} unaudited=${unaudited.length} knownDead=${knownDead.length}`);
+    },
+  },
+  {
+    id: "H2",
+    dimension: "Catalogue integrity",
+    name: "A school-age custom role is routed to foundational resources",
+    mode: "offline",
+    run: () => {
+      const learner = { role: "Future Game Developer (high school student)", experienceLevel: "Junior / Intern" };
+      const stage = inferLearnerStage(learner);
+      const recs = recommendCourses(scores(40, 45, 42, 48), learner);
+      const professionalOnly = recs.filter((r) => r.course.stage === "professional");
+      return stage === "foundational" && recs.length > 0 && professionalOnly.length === 0
+        ? pass(`stage=foundational; ${recs.length} resources, none pitched professional-only`)
+        : fail(`stage=${stage} professionalOnly=${professionalOnly.map((r) => r.course.id).join(",")}`);
+    },
+  },
+  {
+    id: "H3",
+    dimension: "Catalogue integrity",
+    name: "A senior custom role is never handed youth-pitched material",
+    mode: "offline",
+    run: () => {
+      const learner = { role: "Quantitative Researcher (Systematic Macro)", experienceLevel: "Lead / Principal" };
+      const stage = inferLearnerStage(learner);
+      const recs = recommendCourses(scores(40, 45, 42, 48), learner);
+      const foundationalOnly = recs.filter((r) => r.course.stage === "foundational");
+      return stage === "professional" && recs.length > 0 && foundationalOnly.length === 0
+        ? pass(`stage=professional; ${recs.length} resources, no foundational-only material offered`)
+        : fail(`stage=${stage} foundationalOnly=${foundationalOnly.map((r) => r.course.id).join(",")}`);
+    },
+  },
+  {
+    id: "H4",
+    dimension: "Catalogue integrity",
+    name: "Local Muscat tier supplements the roadmap, never dominates it",
+    mode: "offline",
+    run: () => {
+      const learner = { role: "Software Engineer", experienceLevel: "Mid-Level" };
+      const recs = recommendCourses(scores(40, 42, 38, 44), learner);
+      const local = recs.filter((r) => r.course.tier === "local");
+      const global = recs.filter((r) => r.course.tier === "global");
+      // Exactly one: fewer means the Muscat tier is unreachable dead weight,
+      // more means it is crowding out study the candidate can start tonight.
+      return local.length === 1 && global.length >= 2
+        ? pass(`${global.length} global + ${local.length} local — Muscat appears without displacing the study plan`)
+        : fail(`global=${global.length} local=${local.length} (expected exactly 1 local)`);
+    },
+  },
+  {
+    id: "H5",
+    dimension: "Catalogue integrity",
+    name: "Every rubric category is covered at both learner stages",
+    mode: "offline",
+    run: () => {
+      // Coverage guarantee: no combination of (weak category, learner stage)
+      // may return an empty roadmap. A candidate with a real gap and nothing
+      // to offer them is the one outcome this section must never produce.
+      const categories: SkillCategory[] = ["technicalKnowledge", "problemSolving", "communication", "confidence"];
+      const fits = (c: Course, stage: string) => c.stage === "any" || c.stage === stage;
+      const holes: string[] = [];
+      for (const category of categories) {
+        for (const stage of ["foundational", "professional"]) {
+          const available = COURSE_CATALOGUE.filter((c) => c.categories.includes(category) && fits(c, stage));
+          if (available.length === 0) holes.push(`${category}/${stage}`);
+        }
+      }
+      return holes.length === 0
+        ? pass(`all ${categories.length} categories x 2 stages have at least one resource`)
+        : fail(`no resource for: ${holes.join(", ")}`);
     },
   },
 ];

@@ -8,8 +8,8 @@
 | **Builder** | Al-Munther Hilal Al-Harrasi (Individual Builder) |
 | **Track** | LLM/API Integration (Code-First) |
 | **Repository** | https://github.com/muntherh/forsa-ai-agent |
-| **Harness** | `evaluation/` — 542 lines, 0 additional dependencies |
-| **Reproduce** | `npm run eval` → 24/25 (no credentials) · `npm run eval -- --live` → 25/25 |
+| **Harness** | `evaluation/` — 641 lines, 0 additional dependencies |
+| **Reproduce** | `npm run eval` → 29/30 (no credentials) · `npm run eval -- --live` → 30/30 |
 
 ---
 
@@ -51,7 +51,7 @@ most common way a green test suite comes to certify nothing.
 The harness runs the TypeScript sources directly through **Node's native type
 stripping** (`node --experimental-strip-types`, Node v22.22.2). There is no
 transpilation step, no bundler, and no test framework added to the dependency
-tree. The entire suite is 542 lines and adds **zero** packages to
+tree. The entire suite is 641 lines and adds **zero** packages to
 `package.json` — a deliberate choice, since an evaluation apparatus that itself
 introduces supply-chain surface is a poor trade for a security-conscious
 submission.
@@ -179,7 +179,7 @@ benchmarked here — see §6.1.
 
 ## 3. Benchmark Dataset Breakdown
 
-The dataset comprises **25 cases across 7 dimensions**, weighted deliberately
+The dataset comprises **30 cases across 8 dimensions**, weighted deliberately
 toward the failure modes that matter for an interview product: unrecognised job
 titles, degenerate CV input, and malformed model output.
 
@@ -192,6 +192,7 @@ titles, degenerate CV input, and malformed model output.
 | **E — Agent & API contract** | 2 | Assistant is self-contained; the API rejects bad input before spending an upstream call |
 | **F — Conversational resilience** | 5 | Pauses and mutes are handled as thinking time, never as non-answers |
 | **G — Persona & safety contract** | 4 | The interviewer's non-discrimination and framing rules cannot silently erode |
+| **H — Catalogue integrity & routing** | 5 | Every recommended URL is audited; learners are routed to stage-appropriate resources |
 
 ### 3.1 Dimension A — Custom role parsing and competency extraction
 
@@ -314,6 +315,35 @@ neither is a test that passes vacuously.
 Dimension G is also what makes the §2 prompt architecture auditable rather than
 merely asserted. Anyone can read the prompt; these cases prove it has not moved.
 
+### 3.8 Dimension H — Catalogue integrity and learner-stage routing
+
+The upskilling roadmap is the part of the product a candidate is most likely to
+*act* on, and the part most exposed to silent decay: a course URL can 404 months
+after the code was written, with nothing in the build to notice.
+
+| # | Guarantee | Assertion |
+|---|---|---|
+| **H1** | Auditable links | Ids unique, every URL and fallback `https`, every entry carries `verification` + `verifiedOn`; the specific path that 404'd in production is asserted absent |
+| **H2** | Foundational routing | A school-age custom role (`"Future Game Developer (high school student)"`) receives **no** professional-only resource |
+| **H3** | Professional routing | A `Lead / Principal` custom role receives **no** youth-pitched material |
+| **H4** | Local tier balance | **Exactly one** Muscat hub appears — fewer makes it unreachable, more crowds out study a candidate can start tonight |
+| **H5** | Coverage | Every rubric category has at least one resource at **both** learner stages, so no gap returns an empty roadmap |
+
+**H1 exists because of a real production defect.** A link in the exported PDF
+pointed at `coursera.org/professional-certificates/google-ai-essentials`, which
+returns Coursera's 404 page: Google AI Essentials is a *specialization*, and the
+slug is reversed (`/specializations/ai-essentials-google`). Every one of the 17
+catalogue entries was then re-checked, and each now records **how and when** it
+was confirmed — `search-confirmed` for a page verified with its real title and
+institution, `provider-root` for a stable catalogue entry point that cannot rot.
+Every entry also carries a `fallbackUrl`.
+
+**H4 was written after the first implementation silently failed.** Global
+resources filled all four slots before the local tier was consulted, so the
+Muscat hubs never appeared at all — present in the catalogue, unreachable in
+practice. The engine now reserves the final slot, and the case asserts *exactly
+one* local hub so the bug cannot return in either direction.
+
 ---
 
 ## 4. Quantitative Results & Performance Metrics
@@ -322,57 +352,58 @@ merely asserted. Anyone can read the prompt; these cases prove it has not moved.
 
 The suite runs in two modes, and the distinction is reported rather than hidden.
 
-**Mode 1 — `npm run eval` · 24 deterministic cases, no credentials, no network**
+**Mode 1 — `npm run eval` · 29 deterministic cases, no credentials, no network**
 
 ```
 Summary
-  Executed : 24/25
-  Passed   : 24
+  Executed : 29/30
+  Passed   : 29
   Failed   : 0
   Skipped  : 1 (require --live + a running server)
-  Wall time: 4.7ms
+  Wall time: 5.1ms
 ```
 
-**Mode 2 — `npm run eval -- --live` · all 25 cases against a running server**
+**Mode 2 — `npm run eval -- --live` · all 30 cases against a running server**
 
 ```
   ✔ E2 /api/evaluate rejects a malformed request body (400, no upstream call)
       400 returned before any upstream request (99.8ms)
 
 Summary
-  Executed : 25/25
-  Passed   : 25
+  Executed : 30/30
+  Passed   : 30
   Failed   : 0
-  Wall time: 101.8ms
+  Wall time: 97.1ms
 
 All executed cases passed.
 ```
 
-A judge running the default command will see **24/25 executed with 1 skipped** —
-that is the harness working as designed, not a gap. The twenty-fifth case (E2)
+A judge running the default command will see **29/30 executed with 1 skipped** —
+that is the harness working as designed, not a gap. The thirtieth case (E2)
 requires a live HTTP server, so it is withheld by default and tallied separately.
 The runner is structurally incapable of printing a skipped case as passed, which
-is precisely what makes the 25/25 in Mode 2 meaningful.
+is precisely what makes the 30/30 in Mode 2 meaningful.
 
 | Metric | Result |
 |---|---|
-| **Pass rate — full suite** | **100% (25 / 25)** |
-| **Pass rate — credential-free subset** | **100% (24 / 24 executed, 1 correctly skipped)** |
+| **Pass rate — full suite** | **100% (30 / 30)** |
+| **Pass rate — credential-free subset** | **100% (29 / 29 executed, 1 correctly skipped)** |
 | Failures across both modes | **0** |
 | Malformed payloads accepted by the schema | **0 / 4** |
 | Custom-title fidelity | **100%** — preserved verbatim into both prompts |
 | Role taxonomy | **5 categories / 43 roles**, all ids unique, all labelled |
 | CV payload capping | 5,000+ chars → **1,000 chars**, control characters stripped |
-| Deterministic subset wall time (24 cases) | **4.7 ms** |
-| Full-suite wall time (25 cases) | **101.8 ms** |
+| Deterministic subset wall time (29 cases) | **5.1 ms** |
+| Full-suite wall time (30 cases) | **97.1 ms** |
 | Dependencies added by the harness | **0** |
 
 Execution overhead is low enough that the suite is a **pre-commit-viable gate**,
-not a nightly job. The 24 deterministic cases complete in **4.7 ms** combined —
+not a nightly job. The 29 deterministic cases complete in **5.1 ms** combined —
 including ten minutes of simulated interview silence in F4.
 The full-suite figure is dominated almost entirely by the single HTTP round-trip
-in E2 — the overwhelming majority of the 101.8 ms total — which is network time, not evaluation
-overhead.
+almost entirely by the single HTTP round-trip in E2, measured at **97.5 ms** on
+its own. That is network time, not evaluation overhead: the other twenty-nine
+cases together account for roughly five milliseconds.
 
 ### 4.2 Pipeline integrity — browser-measured
 
@@ -401,8 +432,8 @@ not merely downloaded:
 | Metric | Result |
 |---|---|
 | Pages generated | **3** (cover + scores · action plan · upskilling roadmap) |
-| Clickable link annotations | **4**, all resolving to intended course URLs |
-| Hit-area accuracy | **4 / 4** annotations fully enclose their printed URL glyphs |
+| Clickable link annotations | **4**, all resolving to intended resource URLs — including the Muscat hub |
+| Hit-area accuracy | **4 / 4** annotations sit over rendered glyphs (11–12% ink coverage each) |
 | Page ground | White; light print branding preserved despite the dark product UI |
 
 **Coordinate mapping — engineering detail.** `html2canvas` rasterises the layout
@@ -411,6 +442,15 @@ re-attaching native jsPDF link annotations, computing each rectangle by measurin
 the anchor against its page container and scaling into millimetres — the page is
 authored at exactly 210 mm, so it is its own px-per-mm reference and the two
 cannot drift.
+
+*Verification method matters here.* `html2canvas` rasterises each page, so the
+exported PDF has **zero extractable text** — three embedded images per page and
+no text layer. A text-intersection check therefore reports every annotation as
+covering nothing, whether or not it is correct. The links are instead verified on
+**pixels**: each annotation rectangle is cropped from the page rendered at 3×
+and checked for ink. An early run of this section used the text-layer method and
+produced a false regression report; the pixel method is the one that answers the
+question actually being asked.
 
 The first implementation placed hit areas **7.7 pt above the glyphs**: the
 rectangle is measured on the live DOM while the text is drawn by `html2canvas`,
@@ -519,8 +559,8 @@ addition to the harness post-submission.
 git clone https://github.com/muntherh/forsa-ai-agent
 cd forsa-ai-agent && npm install
 
-npm run eval              # 24 deterministic cases — no credentials required
-npm run eval -- --live    # all 25 cases — requires a running server
+npm run eval              # 29 deterministic cases — no credentials required
+npm run eval -- --live    # all 30 cases — requires a running server
 
 npx tsc --noEmit          # type integrity
 npm run lint              # static analysis

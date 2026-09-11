@@ -161,11 +161,11 @@ export default function Scorecard({ data, role, experienceLevel }: ScorecardProp
       </div>
 
       <div className="mt-8 border-t border-line pt-8 dark:border-white/10">
-        <UpskillingRecommendations data={data} />
+        <UpskillingRecommendations data={data} learner={{ role, experienceLevel }} />
       </div>
 
       <div className="mt-8">
-        <ScorecardPdfReport data={data} role={role} experienceLevel={experienceLevel} />
+        <ScorecardPdfReport data={data} role={role} experienceLevel={experienceLevel} learner={{ role, experienceLevel }} />
       </div>
 
       <p className="mt-6 border-t border-line pt-4 text-xs text-muted dark:border-white/10 dark:text-dark-muted">

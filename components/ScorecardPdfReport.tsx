@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import type { Scorecard as ScorecardData } from "@/lib/types";
-import { CATEGORY_LABELS as SKILL_LABELS, recommendCourses } from "@/lib/upskilling";
+import { CATEGORY_LABELS as SKILL_LABELS, recommendCourses, type LearnerContext } from "@/lib/upskilling";
 
 /**
  * Renders a downloadable, branded PDF of a finished interview's scorecard
@@ -167,9 +167,11 @@ export interface ScorecardPdfReportProps {
   data: ScorecardData;
   role: string;
   experienceLevel: string;
+  /** Routes the printed roadmap to foundational or professional resources. */
+  learner?: LearnerContext;
 }
 
-export default function ScorecardPdfReport({ data, role, experienceLevel }: ScorecardPdfReportProps) {
+export default function ScorecardPdfReport({ data, role, experienceLevel, learner }: ScorecardPdfReportProps) {
   const [status, setStatus] = useState<"idle" | "generating" | "success" | "error">("idle");
 
   const handleDownload = useCallback(async () => {
@@ -245,7 +247,7 @@ export default function ScorecardPdfReport({ data, role, experienceLevel }: Scor
 
   // The roadmap page is only emitted when there is something to put on it, so
   // the page count below has to follow it rather than being hardcoded.
-  const recommendations = recommendCourses(data);
+  const recommendations = recommendCourses(data, learner);
   const totalPages = recommendations.length > 0 ? 3 : 2;
 
   const label =
