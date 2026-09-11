@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { EXPERIENCE_LEVELS, ROLE_CATEGORIES, type RoleOption } from "@/lib/roles";
+import { playSound } from "@/lib/sounds";
 
 interface RoleSelectorProps {
   role: string;
@@ -78,7 +79,22 @@ export default function RoleSelector({ role, onRoleChange, level, onLevelChange 
     [role]
   );
 
+  /**
+   * Single funnel for moving the highlight, so hover and arrow-key navigation
+   * get identical feedback. playSound throttles internally — sweeping the
+   * cursor down the list fires one mouseenter per row, which without a floor
+   * would be a burst rather than a tick.
+   */
+  function moveHighlight(next: number) {
+    // Compared against the current render's value and fired OUTSIDE the state
+    // updater: updaters must stay pure, and React double-invokes them in
+    // StrictMode — a playSound() in there would fire twice per move in dev.
+    if (next !== highlight) playSound("tick");
+    setHighlight(next);
+  }
+
   function commit(row: MenuRow) {
+    playSound("click");
     onRoleChange(row.label);
     setQuery("");
   }
@@ -86,10 +102,12 @@ export default function RoleSelector({ role, onRoleChange, level, onLevelChange 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setHighlight((i) => (rows.length ? (i + 1) % rows.length : 0));
+      if (!rows.length) return;
+      moveHighlight((highlight + 1) % rows.length);
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setHighlight((i) => (rows.length ? (i - 1 + rows.length) % rows.length : 0));
+      if (!rows.length) return;
+      moveHighlight((highlight - 1 + rows.length) % rows.length);
     } else if (event.key === "Enter") {
       event.preventDefault();
       const row = rows[highlight];
@@ -143,13 +161,13 @@ export default function RoleSelector({ role, onRoleChange, level, onLevelChange 
         </div>
 
         <div className="flex flex-wrap gap-1.5 border-b border-line px-3 py-2.5 dark:border-white/10">
-          <FilterPill label="All" active={categoryFilter === null} onClick={() => setCategoryFilter(null)} />
+          <FilterPill label="All" active={categoryFilter === null} onClick={() => { playSound("click"); setCategoryFilter(null); }} />
           {ROLE_CATEGORIES.map((category) => (
             <FilterPill
               key={category.id}
               label={category.label.split(" & ")[0].split(", ")[0]}
               active={categoryFilter === category.id}
-              onClick={() => setCategoryFilter(category.id)}
+              onClick={() => { playSound("click"); setCategoryFilter(category.id); }}
             />
           ))}
         </div>
@@ -179,7 +197,7 @@ export default function RoleSelector({ role, onRoleChange, level, onLevelChange 
                     type="button"
                     role="option"
                     aria-selected={isSelected}
-                    onMouseEnter={() => setHighlight(index)}
+                    onMouseEnter={() => moveHighlight(index)}
                     onClick={() => commit(row)}
                     className={`relative flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-2 text-left text-[13px] transition-colors ${
                       isHighlighted
@@ -255,7 +273,10 @@ export default function RoleSelector({ role, onRoleChange, level, onLevelChange 
               <button
                 key={option}
                 type="button"
-                onClick={() => onLevelChange(option)}
+                onClick={() => {
+                  playSound("click");
+                  onLevelChange(option);
+                }}
                 aria-pressed={isActive}
                 className={`relative flex-1 rounded-full px-2 py-1.5 text-[11px] font-semibold transition-colors sm:text-xs ${
                   isActive ? "text-white" : "text-muted hover:text-navy dark:text-dark-muted dark:hover:text-white"

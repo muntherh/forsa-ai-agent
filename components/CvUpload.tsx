@@ -2,8 +2,10 @@
 
 import { useCallback, useId, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import CvScanAnimation from "@/components/CvScanAnimation";
+import { playSound } from "@/lib/sounds";
 
-type UploadStatus = "idle" | "dragging" | "uploading" | "ready" | "error";
+type UploadStatus = "idle" | "dragging" | "scanning" | "ready" | "error";
 
 interface CvUploadProps {
   /** Fires with the extracted text + file name once a CV is parsed, or with (null, null) when cleared. */
@@ -11,6 +13,17 @@ interface CvUploadProps {
 }
 
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Minimum time the scanning animation stays on screen.
+ *
+ * Deliberately a FLOOR, not a delay: the extraction request runs at the same
+ * time, and we wait on whichever finishes last. A fast parse (a few hundred
+ * ms) still gets a full, deliberate-feeling scan; a slow one adds nothing on
+ * top. Sleeping first and only then uploading would have made every slow
+ * parse two seconds worse.
+ */
+const MIN_SCAN_MS = 2000;
 const SPRING = { type: "spring", damping: 20, stiffness: 300 } as const;
 
 export default function CvUpload({ onChange }: CvUploadProps) {
@@ -47,14 +60,28 @@ export default function CvUpload({ onChange }: CvUploadProps) {
         return;
       }
 
-      setStatus("uploading");
+      setStatus("scanning");
       setFileName(file.name);
+
+      // Kick off the real work and the minimum-display timer together, then
+      // settle on whichever takes longer.
+      const started = Date.now();
+      const holdForMinimum = async () => {
+        const elapsed = Date.now() - started;
+        if (elapsed < MIN_SCAN_MS) {
+          await new Promise((resolve) => setTimeout(resolve, MIN_SCAN_MS - elapsed));
+        }
+      };
 
       try {
         const formData = new FormData();
         formData.append("file", file);
         const res = await fetch("/api/cv-extract", { method: "POST", body: formData });
         const data = await res.json().catch(() => null);
+
+        // The floor applies to the failure path too — otherwise a fast 400
+        // makes the scan flash on and off.
+        await holdForMinimum();
 
         if (!res.ok || !data?.text) {
           setStatus("error");
@@ -64,9 +91,12 @@ export default function CvUpload({ onChange }: CvUploadProps) {
 
         setStatus("ready");
         setCharCount(data.text.length);
+        // Only on a genuine success — a chime over an error would be a lie.
+        playSound("chime");
         onChange(data.text as string, file.name);
       } catch (err) {
         console.error("CV upload failed:", err);
+        await holdForMinimum();
         setStatus("error");
         setErrorMessage("Failed to upload the file. Check your connection and try again.");
       }
@@ -153,16 +183,9 @@ export default function CvUpload({ onChange }: CvUploadProps) {
           </motion.label>
         )}
 
-        {status === "uploading" && (
-          <motion.div
-            key="uploading"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="mt-2 flex items-center gap-2.5 rounded-2xl border border-line bg-white/50 px-4 py-3.5 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.03]"
-          >
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-blue dark:border-white/15 dark:border-t-teal-glow" />
-            <span className="truncate text-sm text-muted dark:text-dark-muted">Reading {fileName}…</span>
+        {status === "scanning" && (
+          <motion.div key="scanning" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <CvScanAnimation fileName={fileName} />
           </motion.div>
         )}
 

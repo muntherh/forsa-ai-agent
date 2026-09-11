@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { AnimatePresence, motion, useTransform, type MotionValue } from "framer-motion";
+import { AnimatePresence, motion, useSpring, useTransform, type MotionValue } from "framer-motion";
 import { alpha, mix, seededRandom, useSafeReducedMotion } from "@/lib/motion";
 import type { CallStatus } from "@/lib/types";
 
@@ -10,61 +10,105 @@ import type { CallStatus } from "@/lib/types";
 // voice-interview UI.
 const BLUE = "#2470B3";
 const TEAL = "#1FA98A";
+// Brighter end of the same ramp (tailwind.config.ts `emerald.glow`), used for
+// the centre of the bar gradient and the glow.
+const EMERALD = "#34E7BE";
 const SIZE = 176;
-const BAR_COUNT = 32;
+// Seven bars: enough for a sense of spectrum, few enough that each one is a
+// chunky, readable element rather than a hairline.
+const BAR_COUNT = 7;
 
+/**
+ * Per-bar response curve. `envelope` tapers the outer bars so the group reads
+ * as one waveform rather than a flat row; `sensitivity` and `lag` are jittered
+ * per bar so they don't all snap in unison (which looks like a single block
+ * scaling) — the illusion of frequency bands from a single amplitude value.
+ */
 function useWaveformBars() {
   return useMemo(() => {
     const random = seededRandom(0x5f3a2b);
     return Array.from({ length: BAR_COUNT }, (_, index) => {
       const position = index / (BAR_COUNT - 1);
-      const envelope = Math.pow(Math.sin(position * Math.PI), 0.7);
       const fromCentre = Math.abs(position - 0.5) * 2;
-      const peak = (raw: number) => Math.max(0.08, Math.min(1, raw * envelope));
+      const envelope = 0.55 + 0.45 * Math.pow(Math.sin(position * Math.PI), 0.8);
 
       return {
-        colour: mix(BLUE, TEAL, fromCentre),
-        glow: mix(BLUE, TEAL, fromCentre, 0.5),
-        keyframes: [
-          peak(0.28 + random() * 0.3),
-          peak(0.62 + random() * 0.38),
-          peak(0.22 + random() * 0.34),
-          peak(0.74 + random() * 0.26),
-          peak(0.34 + random() * 0.3),
-        ],
-        duration: 1.05 + random() * 0.8,
-        delay: random() * 0.5,
-        rest: peak(0.2 + random() * 0.16),
+        // Teal at the edges through emerald at the centre, so the brightest
+        // point of the gradient sits where the bars are tallest.
+        colour: mix(TEAL, EMERALD, 1 - fromCentre),
+        glow: mix(TEAL, EMERALD, 1 - fromCentre),
         envelope,
-        sensitivity: 0.7 + random() * 0.6,
+        sensitivity: 2.1 + random() * 1.5,
+        // Stiffness jitter: each bar settles on a slightly different spring so
+        // the row ripples instead of moving as one.
+        stiffness: 260 + random() * 180,
+        rest: 0.12 + random() * 0.06,
+        idleKeyframes: [
+          0.18 + random() * 0.16,
+          0.5 + random() * 0.34,
+          0.24 + random() * 0.2,
+          0.62 + random() * 0.3,
+        ],
+        idleDuration: 1.1 + random() * 0.7,
+        idleDelay: random() * 0.5,
       };
     });
   }, []);
 }
 
-function LiveBar({
-  volume,
-  envelope,
-  sensitivity,
-  restScale,
-  reduced,
-  colour,
-  glow,
-}: {
-  volume: MotionValue<number>;
-  envelope: number;
-  sensitivity: number;
-  restScale: number;
-  reduced: boolean;
-  colour: string;
-  glow: string;
-}) {
-  const scaleY = useTransform(volume, (v) => (reduced ? restScale : Math.min(1, 0.1 + v * sensitivity * envelope)));
+type Bar = ReturnType<typeof useWaveformBars>[number];
+
+function LiveBar({ volume, bar, reduced }: { volume: MotionValue<number>; bar: Bar; reduced: boolean }) {
+  // Raw amplitude -> this bar's target height, then a spring so the bar
+  // glides to each new level instead of snapping on every volume event
+  // (Vapi emits them far faster than the eye wants to track).
+  const target = useTransform(volume, (v) =>
+    reduced ? bar.rest : Math.max(bar.rest, Math.min(1, v * bar.sensitivity * bar.envelope))
+  );
+  const scaleY = useSpring(target, { stiffness: bar.stiffness, damping: 26, mass: 0.35 });
+  // Quiet bars dim as well as shrink — height alone reads as mechanical.
+  const opacity = useTransform(scaleY, [bar.rest, 1], [0.45, 1]);
+
   return (
     <motion.span
       aria-hidden
-      className="block h-full flex-1 rounded-full"
-      style={{ maxWidth: 6, backgroundColor: colour, boxShadow: `0 0 10px ${glow}`, scaleY }}
+      className="block w-2.5 rounded-full sm:w-3"
+      style={{
+        height: "100%",
+        originY: 0.5,
+        scaleY,
+        opacity,
+        background: `linear-gradient(180deg, ${bar.colour} 0%, ${mix(bar.colour, EMERALD, 0.6)} 100%)`,
+        filter: `drop-shadow(0 0 8px ${alpha(bar.glow, 0.85)}) drop-shadow(0 0 18px ${alpha(bar.glow, 0.4)})`,
+      }}
+    />
+  );
+}
+
+function IdleBar({ bar, reduced }: { bar: Bar; reduced: boolean }) {
+  return (
+    <motion.span
+      aria-hidden
+      className="block w-2.5 rounded-full sm:w-3"
+      style={{
+        height: "100%",
+        originY: 0.5,
+        background: `linear-gradient(180deg, ${bar.colour} 0%, ${mix(bar.colour, EMERALD, 0.6)} 100%)`,
+        filter: `drop-shadow(0 0 8px ${alpha(bar.glow, 0.7)}) drop-shadow(0 0 18px ${alpha(bar.glow, 0.3)})`,
+      }}
+      initial={{ scaleY: bar.rest }}
+      animate={reduced ? { scaleY: bar.rest } : { scaleY: bar.idleKeyframes }}
+      transition={
+        reduced
+          ? { duration: 0 }
+          : {
+              duration: bar.idleDuration,
+              delay: bar.idleDelay,
+              repeat: Infinity,
+              repeatType: "mirror",
+              ease: "easeInOut",
+            }
+      }
     />
   );
 }
@@ -72,33 +116,12 @@ function LiveBar({
 function SpeakingBars({ reduced, volume }: { reduced: boolean; volume?: MotionValue<number> }) {
   const bars = useWaveformBars();
   return (
-    <div className="flex h-full w-full items-center justify-center gap-1 px-4">
+    <div className="flex h-20 w-full items-center justify-center gap-2.5 px-4 sm:gap-3">
       {bars.map((bar, index) =>
         volume ? (
-          <LiveBar
-            key={index}
-            volume={volume}
-            envelope={bar.envelope}
-            sensitivity={bar.sensitivity}
-            restScale={bar.rest}
-            reduced={reduced}
-            colour={bar.colour}
-            glow={bar.glow}
-          />
+          <LiveBar key={index} volume={volume} bar={bar} reduced={reduced} />
         ) : (
-          <motion.span
-            key={index}
-            aria-hidden
-            className="block h-full flex-1 rounded-full"
-            style={{ maxWidth: 6, backgroundColor: bar.colour, boxShadow: `0 0 10px ${bar.glow}` }}
-            initial={{ scaleY: bar.rest }}
-            animate={reduced ? { scaleY: bar.rest } : { scaleY: bar.keyframes }}
-            transition={
-              reduced
-                ? { duration: 0 }
-                : { duration: bar.duration, delay: bar.delay, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }
-            }
-          />
+          <IdleBar key={index} bar={bar} reduced={reduced} />
         )
       )}
     </div>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { playSound } from "@/lib/sounds";
 import AppHeader from "@/components/AppHeader";
 import BrandMark from "@/components/BrandMark";
 import CinematicText from "@/components/CinematicText";
@@ -79,7 +80,10 @@ export default function LandingPage() {
         >
           <motion.button
             type="button"
-            onClick={() => setIsExiting(true)}
+            onClick={() => {
+              playSound("click");
+              setIsExiting(true);
+            }}
             whileHover={{ y: -2 }}
             whileTap={{ scale: 0.985, y: 0 }}
             transition={{ type: "spring", stiffness: 300, damping: 20 }}

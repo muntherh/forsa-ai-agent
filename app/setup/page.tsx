@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { playSound } from "@/lib/sounds";
 import AppHeader from "@/components/AppHeader";
 import CvUpload from "@/components/CvUpload";
 import GeometricBackground from "@/components/GeometricBackground";
@@ -26,6 +27,7 @@ export default function SetupPage() {
   const [isExiting, setIsExiting] = useState(false);
 
   function startInterview() {
+    playSound("click");
     saveInterviewSetup({
       role,
       experienceLevel: level,
