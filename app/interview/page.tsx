@@ -10,6 +10,17 @@ import GeometricBackground from "@/components/GeometricBackground";
 import TranscriptPanel from "@/components/TranscriptPanel";
 import VoiceWaveform from "@/components/VoiceWaveform";
 import { buildInterviewAssistant, buildInterviewVariableValues } from "@/lib/assistant";
+import {
+  createInterviewFlowState,
+  noteAssistantSpeechEnd,
+  noteAssistantSpeechStart,
+  noteCandidateAudio,
+  noteMuteChange,
+  nextReassurance,
+  MUTE_CONTEXT_NOTICE,
+  UNMUTE_CONTEXT_NOTICE,
+  type InterviewFlowState,
+} from "@/lib/interview-flow";
 import { clearInterviewSetup, loadInterviewSetup, savePendingEvaluation } from "@/lib/interview-session";
 import { getVapiClient, isVapiConfigured } from "@/lib/vapi-client";
 import type { CallStatus, TranscriptTurn } from "@/lib/types";
@@ -24,6 +35,11 @@ const DEFAULT_LEVEL = "Mid-Level";
 // meaningful — guards against scoring a call that ended in the first few
 // seconds (e.g. the candidate hung up immediately).
 const MIN_TURNS_FOR_EVALUATION = 2;
+
+// How often the silence coach is evaluated. One second is far finer than the
+// 10s threshold it guards, so the prompt never lands noticeably late, and the
+// work per tick is a handful of numeric comparisons.
+const FLOW_TICK_MS = 1000;
 
 function describeVapiError(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -65,6 +81,11 @@ export default function InterviewPage() {
   // Set once vapi.start() resolves with the call's own id — used only as
   // the server-side transcript-fallback key (see lib/vapi-server.ts).
   const callIdRef = useRef<string | null>(null);
+  // Conversational-resilience state. Held in a ref, not state: it is updated
+  // from Vapi event handlers and a timer many times a second, and nothing in
+  // the render tree depends on it — making it state would re-render the page
+  // on every microphone sample for no visual gain.
+  const flowRef = useRef<InterviewFlowState>(createInterviewFlowState(0));
 
   // The setup payload is single-use: read it once, then clear it so a later
   // visit that doesn't go through /setup can't silently reuse a stale role
@@ -112,6 +133,7 @@ export default function InterviewPage() {
 
     const handleCallStart = () => {
       hasEndedRef.current = false;
+      flowRef.current = createInterviewFlowState(Date.now());
       setStatus("listening");
     };
 
@@ -123,16 +145,28 @@ export default function InterviewPage() {
 
     const handleSpeechStart = () => {
       if (hasEndedRef.current) return;
+      flowRef.current = noteAssistantSpeechStart(flowRef.current, Date.now());
       setStatus("speaking");
     };
 
     const handleSpeechEnd = () => {
       if (hasEndedRef.current) return;
+      // The agent has stopped: the candidate's turn starts now, and the
+      // silence clock starts with it.
+      flowRef.current = noteAssistantSpeechEnd(flowRef.current, Date.now());
       setStatus("listening");
     };
 
     const handleVolumeLevel = (level: number) => {
       assistantVolumeRaw.set(level);
+    };
+
+    // The candidate's OWN microphone level, which is what tells us whether a
+    // silence is real. `volume-level` above is the assistant's output and would
+    // reset the clock every time Ava spoke.
+    const handleLocalVolumeLevel = (level: number) => {
+      if (hasEndedRef.current) return;
+      flowRef.current = noteCandidateAudio(flowRef.current, level, Date.now());
     };
 
     const handleError = (err: unknown) => {
@@ -161,15 +195,36 @@ export default function InterviewPage() {
     vapi.on("speech-start", handleSpeechStart);
     vapi.on("speech-end", handleSpeechEnd);
     vapi.on("volume-level", handleVolumeLevel);
+    vapi.on("local-volume-level", handleLocalVolumeLevel);
     vapi.on("message", handleMessage);
     vapi.on("error", handleError);
 
+    // The silence coach. Everything it decides lives in lib/interview-flow.ts;
+    // this timer only asks "is anything due?" and delivers the line.
+    const flowTimer = window.setInterval(() => {
+      if (hasEndedRef.current) return;
+      const due = nextReassurance(flowRef.current, Date.now());
+      if (!due) return;
+      flowRef.current = due.state;
+      try {
+        // `interruptionsEnabled` matters: the candidate finding their words
+        // mid-reassurance must be able to talk straight over it.
+        vapi.send({ type: "say", message: due.line, interruptionsEnabled: true });
+      } catch (err) {
+        // A send can race the call ending. Never surface this to the
+        // candidate — a failed reassurance is not a failed interview.
+        console.warn("[interview] reassurance not delivered:", err);
+      }
+    }, FLOW_TICK_MS);
+
     return () => {
+      window.clearInterval(flowTimer);
       vapi.off("call-start", handleCallStart);
       vapi.off("call-end", handleCallEnd);
       vapi.off("speech-start", handleSpeechStart);
       vapi.off("speech-end", handleSpeechEnd);
       vapi.off("volume-level", handleVolumeLevel);
+      vapi.off("local-volume-level", handleLocalVolumeLevel);
       vapi.off("message", handleMessage);
       vapi.off("error", handleError);
       if (!hasEndedRef.current) vapi.stop();
@@ -203,14 +258,43 @@ export default function InterviewPage() {
     }
   }, []);
 
+  /**
+   * Smart Mute. Muting is not just a switch on the audio track — it is a
+   * deliberate signal ("give me a second") that the agent otherwise has no way
+   * of seeing. Alongside stopping transmission, a system turn is written into
+   * the conversation so the agent knows the silence is intentional and does not
+   * treat it as a non-answer, repeat itself, or move on.
+   *
+   * `triggerResponseEnabled: false` is the important half: the notice is
+   * context, not a cue to start talking. An agent that announced "I see you have
+   * muted" would defeat the entire point.
+   */
   const handleToggleMute = useCallback(() => {
     const vapi = getVapiClient();
     const next = !muted;
     vapi.setMuted(next);
     setMuted(next);
+    flowRef.current = noteMuteChange(flowRef.current, next, Date.now());
+    try {
+      vapi.send({
+        type: "add-message",
+        message: { role: "system", content: next ? MUTE_CONTEXT_NOTICE : UNMUTE_CONTEXT_NOTICE },
+        triggerResponseEnabled: false,
+      });
+    } catch (err) {
+      // The mute itself already succeeded; only the contextual hint was lost.
+      console.warn("[interview] mute context not delivered:", err);
+    }
   }, [muted]);
 
-  const handleEnd = useCallback(() => {
+  /**
+   * Ends the session deliberately and hands off for scoring. This is a finish,
+   * not a kill: `vapi.stop()` fires `call-end`, which routes the transcript to
+   * /evaluating exactly as a naturally-concluded interview does. The confirmation
+   * step lives in CallControls so a mis-click during a live interview cannot
+   * discard the session.
+   */
+  const handleFinish = useCallback(() => {
     const vapi = getVapiClient();
     vapi.stop();
   }, []);
@@ -279,7 +363,7 @@ export default function InterviewPage() {
             muted={muted}
             onStart={handleStart}
             onToggleMute={handleToggleMute}
-            onEnd={handleEnd}
+            onFinish={handleFinish}
           />
         </div>
 

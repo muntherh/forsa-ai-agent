@@ -1,7 +1,7 @@
 /**
  * Forsa AI — pipeline evaluation suite.
  *
- * 15 benchmark cases exercising the REAL application modules (imported
+ * Benchmark cases exercising the REAL application modules (imported
  * directly, not reimplemented) across the four dimensions the platform
  * claims to handle: role/competency extraction, CV context handling,
  * evaluation-schema conformance, and upskilling recommendation logic.
@@ -17,6 +17,19 @@ import { buildInterviewVariableValues, buildInterviewAssistant } from "../lib/as
 import { buildEvaluationUserContent, scorecardSchema } from "../lib/rubric.ts";
 import { ROLE_CATEGORIES, EXPERIENCE_LEVELS } from "../lib/roles.ts";
 import { recommendCourses, COURSE_CATALOGUE } from "../lib/upskilling.ts";
+import {
+  createInterviewFlowState,
+  noteAssistantSpeechEnd,
+  noteAssistantSpeechStart,
+  noteCandidateAudio,
+  noteMuteChange,
+  nextReassurance,
+  MAX_SILENCE_PROMPTS_PER_TURN,
+  MUTED_REASSURANCES,
+  SILENCE_PROMPT_AFTER_MS,
+  SILENCE_REASSURANCES,
+  CANDIDATE_AUDIO_THRESHOLD,
+} from "../lib/interview-flow.ts";
 import type { Scorecard } from "../lib/types.ts";
 
 export type CaseResult = { ok: boolean; detail: string };
@@ -284,6 +297,98 @@ export const CASES: EvalCase[] = [
       } catch (err) {
         return fail(`no server reachable at ${base} (${(err as Error).message})`);
       }
+    },
+  },
+
+  // ─── F. Conversational resilience (silence + Smart Mute) ────────────────
+  {
+    id: "F1",
+    dimension: "Conversational resilience",
+    name: "A brief thinking pause is never interrupted",
+    mode: "offline",
+    run: () => {
+      const t0 = 1_000_000;
+      const s = noteAssistantSpeechEnd(createInterviewFlowState(t0), t0);
+      const due = nextReassurance(s, t0 + 6_000);
+      return due === null
+        ? pass("6s of thought left undisturbed (threshold is 10s)")
+        : fail(`interrupted a 6s pause with: "${due.line}"`);
+    },
+  },
+  {
+    id: "F2",
+    dimension: "Conversational resilience",
+    name: "Ten seconds of dead air earns reassurance, not a skipped question",
+    mode: "offline",
+    run: () => {
+      const t0 = 1_000_000;
+      const s = noteAssistantSpeechEnd(createInterviewFlowState(t0), t0);
+      const due = nextReassurance(s, t0 + SILENCE_PROMPT_AFTER_MS + 500);
+      const known = due && (SILENCE_REASSURANCES as readonly string[]).includes(due.line);
+      return known
+        ? pass(`reassured after ${SILENCE_PROMPT_AFTER_MS / 1000}s: "${due!.line}"`)
+        : fail(due ? `unexpected line: "${due.line}"` : "candidate left in silence indefinitely");
+    },
+  },
+  {
+    id: "F3",
+    dimension: "Conversational resilience",
+    name: "Silence while the interviewer is still speaking never triggers a prompt",
+    mode: "offline",
+    run: () => {
+      const t0 = 1_000_000;
+      // Agent mid-sentence: the candidate being quiet is correct, not dead air.
+      const s = noteAssistantSpeechStart(noteAssistantSpeechEnd(createInterviewFlowState(t0), t0), t0);
+      const due = nextReassurance(s, t0 + 30_000);
+      return due === null
+        ? pass("30s of assistant speech produced no self-interruption")
+        : fail(`talked over its own question with: "${due.line}"`);
+    },
+  },
+  {
+    id: "F4",
+    dimension: "Conversational resilience",
+    name: "Muted candidate gets mute-specific reassurance, capped to avoid nagging",
+    mode: "offline",
+    run: () => {
+      const t0 = 1_000_000;
+      let s = noteMuteChange(noteAssistantSpeechEnd(createInterviewFlowState(t0), t0), true, t0);
+      const lines: string[] = [];
+      // Push well past the cap: 10 minutes of muted silence, sampled per second.
+      for (let t = t0; t <= t0 + 600_000; t += 1_000) {
+        const due = nextReassurance(s, t);
+        if (due) {
+          s = due.state;
+          lines.push(due.line);
+        }
+      }
+      const allMuteSpecific = lines.every((l) => (MUTED_REASSURANCES as readonly string[]).includes(l));
+      const capped = lines.length === MAX_SILENCE_PROMPTS_PER_TURN;
+      return capped && allMuteSpecific
+        ? pass(`${lines.length} mute-aware prompts over 10 minutes, then silence — capped at ${MAX_SILENCE_PROMPTS_PER_TURN}`)
+        : fail(`count=${lines.length} (expected ${MAX_SILENCE_PROMPTS_PER_TURN}), allMuteSpecific=${allMuteSpecific}`);
+    },
+  },
+  {
+    id: "F5",
+    dimension: "Conversational resilience",
+    name: "Real speech resets the clock; room tone does not",
+    mode: "offline",
+    run: () => {
+      const t0 = 1_000_000;
+      const base = noteAssistantSpeechEnd(createInterviewFlowState(t0), t0);
+
+      // Audible speech at 9s, then 5s more silence => only 5s of true silence.
+      const spoke = noteCandidateAudio(base, CANDIDATE_AUDIO_THRESHOLD + 0.1, t0 + 9_000);
+      const afterSpeech = nextReassurance(spoke, t0 + 14_000);
+
+      // Sub-threshold room tone must NOT count as speech, so 11s still prompts.
+      const quiet = noteCandidateAudio(base, CANDIDATE_AUDIO_THRESHOLD / 2, t0 + 9_000);
+      const afterNoise = nextReassurance(quiet, t0 + 11_000);
+
+      return afterSpeech === null && afterNoise !== null
+        ? pass("speech resets the silence clock; sub-threshold room tone is correctly ignored")
+        : fail(`afterSpeech=${afterSpeech ? "prompted" : "silent"} afterNoise=${afterNoise ? "prompted" : "silent"}`);
     },
   },
 ];

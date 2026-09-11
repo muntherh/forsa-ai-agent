@@ -8,8 +8,8 @@
 | **Builder** | Al-Munther Hilal Al-Harrasi (Individual Builder) |
 | **Track** | LLM/API Integration (Code-First) |
 | **Repository** | https://github.com/muntherh/forsa-ai-agent |
-| **Harness** | `evaluation/` — 371 lines, 0 additional dependencies |
-| **Reproduce** | `npm run eval` → 15/16 (no credentials) · `npm run eval -- --live` → 16/16 |
+| **Harness** | `evaluation/` — 476 lines, 0 additional dependencies |
+| **Reproduce** | `npm run eval` → 20/21 (no credentials) · `npm run eval -- --live` → 21/21 |
 
 ---
 
@@ -51,7 +51,7 @@ most common way a green test suite comes to certify nothing.
 The harness runs the TypeScript sources directly through **Node's native type
 stripping** (`node --experimental-strip-types`, Node v22.22.2). There is no
 transpilation step, no bundler, and no test framework added to the dependency
-tree. The entire suite is 371 lines and adds **zero** packages to
+tree. The entire suite is 476 lines and adds **zero** packages to
 `package.json` — a deliberate choice, since an evaluation apparatus that itself
 introduces supply-chain surface is a poor trade for a security-conscious
 submission.
@@ -86,6 +86,8 @@ forcing one model to do both badly.
 | **Speech-to-text** | Deepgram Nova-2 | `language: "en"` |
 | **Text-to-speech** | OpenAI `alloy` | — |
 | **Transport** | Vapi WebRTC | `maxDurationSeconds: 900` |
+| **Turn-taking** | Vapi start/stop speaking plans | `waitSeconds: 1.2`, LiveKit endpointing, `numWords: 3` |
+| **Noise** | Smart background-speech denoising | `enabled: true` |
 | **Post-call evaluation** | Anthropic Claude Sonnet (`claude-sonnet-5`) | Structured Outputs against a Zod schema |
 
 The rationale is latency versus rigour. A live interview turn must return fast
@@ -105,16 +107,45 @@ agent closes the interview itself once its question set is complete, rather than
 the application inferring "done" from transcript heuristics that would misfire on
 a long pause or a candidate's closing remark.
 
-### 2.2 Microphone control and turn-taking, stated precisely
+### 2.2 Conversational resilience: Smart Mute and graceful silence
 
-The candidate has **direct manual control** of the microphone during the call via
-`vapi.setMuted()`, surfaced as a mute toggle in the call controls.
+A voice interview fails in a specific, demoralising way: the candidate pauses to
+think, and the agent reads the silence as a non-answer and moves on. The
+candidate concludes the machine gave up on them. Three mechanisms prevent it.
 
-Turn-taking and barge-in are handled by **Vapi's default real-time pipeline**.
-This project configures no custom speaking plans, silence thresholds, or
-background-denoising parameters. That is stated plainly here because the
-distinction is verifiable in thirty seconds by reading `lib/assistant.ts`, and an
-inflated claim about it would be worth less than the honest one.
+**Turn-taking is tuned, not left at defaults.** `startSpeakingPlan.waitSeconds`
+is raised from 0.4s to **1.2s**, so the agent stops jumping into the mid-sentence
+pauses people take while assembling a technical answer, with **LiveKit smart
+endpointing** (the SDK's explicit recommendation for English). `stopSpeakingPlan`
+requires **3 words** to interrupt, so a listener's "mm" or "right" no longer cuts
+the interviewer off mid-question. Smart background-speech denoising is enabled,
+because live judging happens in a room containing other conversations.
+
+**Smart Mute is a signal, not a switch.** Muting stops transmission *and* writes a
+system turn into the conversation telling the agent the silence is deliberate —
+that it must not be scored as a non-answer, must not trigger a repeat, and must
+not advance to a new question. The notice is injected with
+`triggerResponseEnabled: false`: it is context, not a cue to speak. An agent that
+announced "I see you have muted" would defeat the purpose entirely.
+
+**Silence earns reassurance, not abandonment.** After **10 seconds** of genuine
+dead air on the candidate's turn, the agent speaks one short line — *"Take your
+time, I'm here when you're ready"* — delivered with interruptions enabled so a
+candidate finding their words can talk straight over it. Muted candidates get a
+mute-specific variant. Reassurance is capped at **two per turn**: a third is
+nagging someone who needs to think.
+
+The timing is driven client-side, in `lib/interview-flow.ts`, for a concrete
+reason: Vapi's own `messagePlan.idleMessages` and `silenceTimeoutSeconds` are
+**absent from `CreateAssistantDTO`** in the installed SDK, so neither is settable
+on a transient assistant. Every decision in that module is a pure function —
+state in, state out, no timers, no Vapi handle, no DOM — which is what allows
+Dimension F in §3.6 to test the behaviour directly rather than requiring someone
+to sit through a real ten-second silence.
+
+There is deliberately **no destructive "end call" control**. Finishing is a quiet,
+two-step confirmation that hands off to scoring exactly as a naturally-concluded
+interview does.
 
 ### 2.3 CV → transcript cross-analysis
 
@@ -148,7 +179,7 @@ benchmarked here — see §6.1.
 
 ## 3. Benchmark Dataset Breakdown
 
-The dataset comprises **16 cases across 5 dimensions**, weighted deliberately
+The dataset comprises **21 cases across 6 dimensions**, weighted deliberately
 toward the failure modes that matter for an interview product: unrecognised job
 titles, degenerate CV input, and malformed model output.
 
@@ -159,6 +190,7 @@ titles, degenerate CV input, and malformed model output.
 | **C — Schema conformance** | 4 | Malformed model output is rejected before reaching the UI |
 | **D — Upskilling recommendation logic** | 3 | Recommendations trace to a real deficit, bounded and non-duplicated |
 | **E — Agent & API contract** | 2 | Assistant is self-contained; the API rejects bad input before spending an upstream call |
+| **F — Conversational resilience** | 5 | Pauses and mutes are handled as thinking time, never as non-answers |
 
 ### 3.1 Dimension A — Custom role parsing and competency extraction
 
@@ -236,6 +268,26 @@ card displays the numeric score that triggered it (e.g. *"Communication ·
 | **E1** | Assistant is fully defined in code | Model, voice, transcriber and the `endCall` tool are constructed inline; all three template variables (`{{role}}`, `{{experienceLevel}}`, `{{cvContext}}`) are present. No dashboard-side assistant is required — the platform runs on a public key alone |
 | **E2** | `/api/evaluate` rejects a malformed body | Returns **400 before any upstream call is made**, protecting both latency and spend |
 
+### 3.6 Dimension F — Conversational resilience
+
+The behaviour described in §2.2 is timing-dependent, which normally makes it the
+kind of feature that is demonstrated rather than tested. Because the logic is
+expressed as pure functions over an explicit clock, these cases drive ten minutes
+of simulated silence in under a millisecond.
+
+| # | Scenario | Assertion |
+|---|---|---|
+| **F1** | 6 seconds of thought | **No** interruption — under the 10s threshold |
+| **F2** | 10+ seconds of dead air on the candidate's turn | Exactly one reassurance, drawn from the silence set |
+| **F3** | 30 seconds of silence **while the agent is still speaking** | **No** prompt — the agent never talks over its own question |
+| **F4** | 10 minutes muted, sampled once per second | Exactly **2** prompts, all mute-specific, then silence — the cap holds |
+| **F5** | Audible speech at 9s vs. sub-threshold room tone at 9s | Speech resets the clock; room tone does **not** |
+
+**F3 and F4 are the cases that matter.** F3 guards the failure where an agent
+interrupts itself because it cannot tell its own speech from dead air. F4 proves
+the cap holds under sustained pressure: a candidate who mutes for ten minutes is
+reassured twice and then left in peace, rather than nagged 50 times.
+
 ---
 
 ## 4. Quantitative Results & Performance Metrics
@@ -244,55 +296,56 @@ card displays the numeric score that triggered it (e.g. *"Communication ·
 
 The suite runs in two modes, and the distinction is reported rather than hidden.
 
-**Mode 1 — `npm run eval` · 15 deterministic cases, no credentials, no network**
+**Mode 1 — `npm run eval` · 20 deterministic cases, no credentials, no network**
 
 ```
 Summary
-  Executed : 15/16
-  Passed   : 15
+  Executed : 20/21
+  Passed   : 20
   Failed   : 0
   Skipped  : 1 (require --live + a running server)
-  Wall time: 4.9ms
+  Wall time: 4.2ms
 ```
 
-**Mode 2 — `npm run eval -- --live` · all 16 cases against a running server**
+**Mode 2 — `npm run eval -- --live` · all 21 cases against a running server**
 
 ```
   ✔ E2 /api/evaluate rejects a malformed request body (400, no upstream call)
       400 returned before any upstream request (99.8ms)
 
 Summary
-  Executed : 16/16
-  Passed   : 16
+  Executed : 21/21
+  Passed   : 21
   Failed   : 0
-  Wall time: 103.8ms
+  Wall time: 105.6ms
 
 All executed cases passed.
 ```
 
-A judge running the default command will see **15/16 executed with 1 skipped** —
-that is the harness working as designed, not a gap. The sixteenth case (E2)
+A judge running the default command will see **20/21 executed with 1 skipped** —
+that is the harness working as designed, not a gap. The twenty-first case (E2)
 requires a live HTTP server, so it is withheld by default and tallied separately.
 The runner is structurally incapable of printing a skipped case as passed, which
-is precisely what makes the 16/16 in Mode 2 meaningful.
+is precisely what makes the 21/21 in Mode 2 meaningful.
 
 | Metric | Result |
 |---|---|
-| **Pass rate — full suite** | **100% (16 / 16)** |
-| **Pass rate — credential-free subset** | **100% (15 / 15 executed, 1 correctly skipped)** |
+| **Pass rate — full suite** | **100% (21 / 21)** |
+| **Pass rate — credential-free subset** | **100% (20 / 20 executed, 1 correctly skipped)** |
 | Failures across both modes | **0** |
 | Malformed payloads accepted by the schema | **0 / 4** |
 | Custom-title fidelity | **100%** — preserved verbatim into both prompts |
 | Role taxonomy | **5 categories / 43 roles**, all ids unique, all labelled |
 | CV payload capping | 5,000+ chars → **1,000 chars**, control characters stripped |
-| Deterministic subset wall time (15 cases) | **4.9 ms** |
-| Full-suite wall time (16 cases) | **103.8 ms** |
+| Deterministic subset wall time (20 cases) | **4.2 ms** |
+| Full-suite wall time (21 cases) | **105.6 ms** |
 | Dependencies added by the harness | **0** |
 
 Execution overhead is low enough that the suite is a **pre-commit-viable gate**,
-not a nightly job. The 15 deterministic cases complete in **4.9 ms** combined.
+not a nightly job. The 20 deterministic cases complete in **4.2 ms** combined —
+including ten minutes of simulated interview silence in F4.
 The full-suite figure is dominated almost entirely by the single HTTP round-trip
-in E2 — **99.8 ms of the 103.8 ms total** — which is network time, not evaluation
+in E2 — **99.8 ms of the 105.6 ms total** — which is network time, not evaluation
 overhead.
 
 ### 4.2 Pipeline integrity — browser-measured
@@ -409,11 +462,14 @@ instrumented latency figure is claimed as a controlled measurement.
 deterministic or validation-path response. No timing figure is asserted for the
 live Claude call, as none was measured under controlled conditions.
 
-**6.4 Turn-taking behaviour is not tuned or benchmarked.** Barge-in, endpointing
-and silence handling are Vapi's platform defaults; this project configures no
-custom speaking plans or denoising parameters (see §2.2). Microphone control is
-manual, by candidate action. No claim is made about interruption quality, and no
-measurement of it is reported.
+**6.4 Turn-taking is tuned, but its perceptual quality is not measured.** The
+speaking plans, Smart Mute signalling and silence reassurance in §2.2 are real
+configuration and real code, and Dimension F tests the *decision logic* — when a
+prompt fires, when it must not, and that the cap holds. What is **not** measured
+is how the result feels over a live WebRTC connection: whether 1.2s is the right
+wait on a slow network, or whether a 3-word interruption threshold is
+comfortable in practice. Those are perceptual judgements requiring real calls
+with real candidates. The values are reasoned starting points, not tuned optima.
 
 **6.5 What the boundary buys.** Confining automated claims to deterministic
 logic, schema conformance and system contracts means every figure in §4 is
@@ -437,8 +493,8 @@ addition to the harness post-submission.
 git clone https://github.com/muntherh/forsa-ai-agent
 cd forsa-ai-agent && npm install
 
-npm run eval              # 15 deterministic cases — no credentials required
-npm run eval -- --live    # all 16 cases — requires a running server
+npm run eval              # 20 deterministic cases — no credentials required
+npm run eval -- --live    # all 21 cases — requires a running server
 
 npx tsc --noEmit          # type integrity
 npm run lint              # static analysis

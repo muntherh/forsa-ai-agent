@@ -65,6 +65,20 @@ Run a focused, realistic 6-8 question interview that mixes:
 - Stay encouraging and professional, like a real, fair interviewer. Do not reveal scores,
   judgments, or feedback during the call itself — that comes later, in a separate report.
 
+## Pauses, silence and muting
+Thinking time is part of a real interview, and this candidate may also mute their microphone
+for a moment to gather their thoughts or handle an interruption. Treat both as completely
+normal:
+- Never treat a pause, a silence, or a muted microphone as a non-answer, a wrong answer, or a
+  reason to move on. Do not skip the question, do not substitute a different one, and do not
+  start summarising.
+- If you are told the candidate has muted, simply wait. Do not fill the silence, do not repeat
+  your question, and do not comment on it when they come back.
+- If you do reassure them, keep it to one short, warm line ("Take your time, I'm here when
+  you're ready") and then stop talking. Never stack reassurances back to back.
+- When the candidate resumes, continue from the question already on the table rather than
+  re-asking it, unless they ask you to repeat it.
+
 ## Ending the interview
 Once you have asked a full set of questions (typically after your 6th-8th question and the
 candidate's answer to it), thank the candidate by name if you know it, briefly and warmly close
@@ -100,6 +114,15 @@ const FIRST_MESSAGE =
  * in lib/rubric.ts, which is not something Vapi's assistant config
  * controls.
  */
+/**
+ * Note on silence handling: `silenceTimeoutSeconds` is NOT settable on a
+ * transient assistant in the installed @vapi-ai/web type surface (it is absent
+ * from `CreateAssistantDTO`), and neither is `messagePlan.idleMessages`. Dead
+ * air is therefore handled on the client — see lib/interview-flow.ts, which
+ * reassures the candidate at 10s via `vapi.send({ type: "say" })`. That agent
+ * audio also keeps the session active, well inside Vapi's own server-side
+ * silence default.
+ */
 export function buildInterviewAssistant(): InterviewAssistantConfig {
   return {
     name: "Forsa AI Mock Interviewer",
@@ -125,6 +148,26 @@ export function buildInterviewAssistant(): InterviewAssistantConfig {
       language: "en",
     },
     maxDurationSeconds: 900,
+    // Live judging happens in a room with other people in it. Smart denoising
+    // keeps a neighbouring conversation from being transcribed as the candidate.
+    backgroundSpeechDenoisingPlan: { smartDenoisingPlan: { enabled: true } },
+    startSpeakingPlan: {
+      // Default 0.4s makes the agent jump into the natural mid-sentence pauses
+      // people take while assembling a technical answer. Waiting longer costs a
+      // little responsiveness and buys a conversation that doesn't talk over you.
+      waitSeconds: 1.2,
+      // LiveKit endpointing is the SDK's explicit recommendation for English, and
+      // this assistant is transcribed with `language: "en"`.
+      smartEndpointingPlan: { provider: "livekit" },
+    },
+    stopSpeakingPlan: {
+      // The candidate must say a few real words to interrupt the agent — a single
+      // "mm" or "right" while listening should not cut the interviewer off
+      // mid-question.
+      numWords: 3,
+      voiceSeconds: 0.3,
+      backoffSeconds: 1.5,
+    },
   };
 }
 
