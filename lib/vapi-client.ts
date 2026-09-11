@@ -1,4 +1,5 @@
 import Vapi from "@vapi-ai/web";
+import { getVapiPublicKey } from "./vapi-env";
 
 let vapiInstance: Vapi | null = null;
 
@@ -11,10 +12,10 @@ let vapiInstance: Vapi | null = null;
 export function getVapiClient(): Vapi {
   if (vapiInstance) return vapiInstance;
 
-  const publicKey = process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY;
+  const publicKey = getVapiPublicKey();
   if (!publicKey) {
     throw new Error(
-      "NEXT_PUBLIC_VAPI_PUBLIC_KEY is not set. Copy .env.example to .env.local and add your Vapi public key."
+      "No Vapi browser key found. Set NEXT_PUBLIC_VAPI_PUBLIC_KEY (or NEXT_PUBLIC_VAPI_KEY) — copy .env.example to .env.local and add your Vapi public key."
     );
   }
 
@@ -23,5 +24,5 @@ export function getVapiClient(): Vapi {
 }
 
 export function isVapiConfigured(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY);
+  return Boolean(getVapiPublicKey());
 }
