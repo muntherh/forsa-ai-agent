@@ -1,0 +1,16 @@
+User Input,Expected Output
+When does AI Residency Cohort 9 start?,Cohort 9 starts on 24 Jan 2026.
+How many masterclasses are included in the program?,The program includes 20 masterclasses.
+How long is the AI Residency program?,The program duration is 6 months.
+Is there 1-on-1 mentorship included?,"Yes, one-on-one mentorship is included."
+What is the estimated weekly time commitment?,Estimated time required is about 6 hours per week.
+What skill level is the program designed for?,The program is for Beginner/Intermediate level learners.
+What is the essential prerequisite before starting?,Essential prerequisite: basic Python and understanding what GenAI is.
+Which Python basics should I know before joining?,"You should know variables, loops, conditionals, functions, and data structures like lists and dictionaries."
+Do I need to understand APIs before joining?,Familiarity with APIs and how they connect applications will be helpful.
+Do I need prior knowledge of LLMs like ChatGPT?,"A beginner-level understanding of AI/LLMs (e.g., what ChatGPT is and how it generates responses) is helpful."
+Do I need an advanced technical background to join?,No advanced technical background is required.
+Which tools are advantageous to have experience with?,"Experience with Google Colab, GitHub, and data analysis libraries like Pandas or NumPy is advantageous."
+What setup do I need to participate?,You should have a laptop with internet access and be ready for hands-on work.
+Which platforms might I work with during projects?,"You may work with platforms such as OpenAI, Hugging Face, and LangChain."
+Name three major topics/projects covered in the curriculum.,"Examples include: RAG with LlamaIndex, advanced RAG (llama parse & evaluation), and advanced fine-tuning."

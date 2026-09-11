@@ -1,0 +1,107 @@
+{
+  "_doc": "Per-case grading rubric. A case passes only if every entry in `required` is satisfied, at least `any_of.k` of `any_of.facts` are satisfied, no `forbidden` pattern matches, and the answer polarity matches. Each fact is satisfied when ANY of its alias regexes matches the normalised answer. Authored from the Expected Output column; the dataset itself is never edited.",
+  "cases": [
+    { "id": "R01", "topic": "Cohort start date", "type": "factoid",
+      "required": [
+        { "label": "start date 24 Jan 2026", "any": ["24\\s*jan(uary)?\\s*,?\\s*2026", "jan(uary)?\\s*24\\s*,?\\s*2026", "2026-01-24", "24[/.-]0?1[/.-]2026"] },
+        { "label": "cohort 9", "any": ["cohort\\s*9", "9th\\s*cohort"] }
+      ],
+      "forbidden": ["20(1\\d|2[0-57-9])"] },
+
+    { "id": "R02", "topic": "Masterclass count", "type": "factoid",
+      "required": [
+        { "label": "20", "any": ["\\b20\\b", "\\btwenty\\b"] },
+        { "label": "masterclasses", "any": ["masterclass"] }
+      ],
+      "forbidden": ["\\b(10|15|25|30)\\s*masterclass"] },
+
+    { "id": "R03", "topic": "Program duration", "type": "factoid",
+      "required": [
+        { "label": "6 months", "any": ["\\b6\\s*months?\\b", "\\bsix\\s*months?\\b"] }
+      ],
+      "forbidden": ["\\b(3|4|8|12)\\s*months?\\b"] },
+
+    { "id": "R04", "topic": "1-on-1 mentorship", "type": "yes_no", "polarity": "affirm",
+      "required": [
+        { "label": "mentorship", "any": ["mentorship", "mentoring", "mentor"] },
+        { "label": "one-on-one", "any": ["1[\\s-]*(on|2|to)[\\s-]*1", "one[\\s-]*(on|to)[\\s-]*one", "individual", "personal"] }
+      ] },
+
+    { "id": "R05", "topic": "Weekly time commitment", "type": "factoid",
+      "required": [
+        { "label": "6 hours", "any": ["\\b6\\s*(\\+)?\\s*h(ou)?rs?\\b", "\\bsix\\s*hours?\\b"] },
+        { "label": "per week", "any": ["per\\s*week", "a\\s*week", "weekly", "/\\s*week"] }
+      ] },
+
+    { "id": "R06", "topic": "Target skill level", "type": "factoid",
+      "required": [
+        { "label": "beginner", "any": ["beginner"] },
+        { "label": "intermediate", "any": ["intermediate"] }
+      ],
+      "forbidden": ["\\b(advanced|expert)\\s*(level)?\\s*learners"] },
+
+    { "id": "R07", "topic": "Essential prerequisite", "type": "factoid",
+      "required": [
+        { "label": "basic Python", "any": ["python"] },
+        { "label": "what GenAI is", "any": ["gen\\s*ai", "generative\\s*ai"] }
+      ] },
+
+    { "id": "R08", "topic": "Required Python basics", "type": "enumerate",
+      "any_of": { "k": 4, "facts": [
+        { "label": "variables", "any": ["variables?"] },
+        { "label": "loops", "any": ["loops?", "iteration"] },
+        { "label": "conditionals", "any": ["conditionals?", "if[\\s-]*else", "\\bif\\s*statements?"] },
+        { "label": "functions", "any": ["functions?"] },
+        { "label": "lists", "any": ["lists?"] },
+        { "label": "dictionaries", "any": ["dictionar(y|ies)", "\\bdicts?\\b"] }
+      ] } },
+
+    { "id": "R09", "topic": "API familiarity", "type": "yes_no", "polarity": "soft",
+      "required": [
+        { "label": "APIs", "any": ["\\bapis?\\b"] }
+      ] },
+
+    { "id": "R10", "topic": "Prior LLM knowledge", "type": "yes_no", "polarity": "soft",
+      "required": [
+        { "label": "beginner level", "any": ["beginner", "basic"] },
+        { "label": "AI / LLM", "any": ["\\bllms?\\b", "\\bai\\b", "chatgpt"] }
+      ] },
+
+    { "id": "R11", "topic": "Advanced background not needed", "type": "yes_no", "polarity": "negate",
+      "_note": "No forbidden patterns: a naive one also matches the gold answer, which NEGATES it ('No advanced technical background is required'). Polarity=negate is the correct mechanism and rejects the affirmative corruption on its own.",
+      "required": [
+        { "label": "advanced technical background", "any": ["advanced\\s*(technical\\s*)?background", "advanced\\s*technical"] }
+      ] },
+
+    { "id": "R12", "topic": "Advantageous tooling", "type": "enumerate",
+      "required": [
+        { "label": "Google Colab", "any": ["colab"] },
+        { "label": "GitHub", "any": ["github"] }
+      ],
+      "any_of": { "k": 1, "facts": [
+        { "label": "Pandas", "any": ["pandas"] },
+        { "label": "NumPy", "any": ["numpy"] }
+      ] } },
+
+    { "id": "R13", "topic": "Participation setup", "type": "factoid",
+      "required": [
+        { "label": "laptop", "any": ["laptop", "computer"] },
+        { "label": "internet access", "any": ["internet", "online\\s*access", "wi[\\s-]?fi"] }
+      ] },
+
+    { "id": "R14", "topic": "Project platforms", "type": "enumerate",
+      "required": [
+        { "label": "OpenAI", "any": ["open\\s*ai"] },
+        { "label": "Hugging Face", "any": ["hugging\\s*face", "huggingface"] },
+        { "label": "LangChain", "any": ["lang\\s*chain"] }
+      ] },
+
+    { "id": "R15", "topic": "Curriculum topics", "type": "enumerate",
+      "any_of": { "k": 3, "facts": [
+        { "label": "RAG", "any": ["\\brag\\b", "retrieval[\\s-]*augmented"] },
+        { "label": "LlamaIndex", "any": ["llama\\s*index"] },
+        { "label": "Llama Parse / RAG evaluation", "any": ["llama\\s*parse", "rag\\s*evaluation", "evaluation"] },
+        { "label": "fine-tuning", "any": ["fine[\\s-]*tun"] }
+      ] } }
+  ]
+}
